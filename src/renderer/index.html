@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline';" />
+  <title>KVault Desktop</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Barre de titre personnalisée Windows -->
+  <header class="titlebar">
+    <div class="titlebar-drag">
+      <img src="../../assets/logo.svg" alt="KVault" class="titlebar-logo" />
+      <span class="titlebar-title">KVault <span class="accent-text">Desktop</span></span>
+      <span class="version-pill" id="versionPill">v0.1.0</span>
+      <div class="connection-badge disconnected" id="connectionBadge">
+        <span class="status-dot"></span>
+        <span id="connectionText">Non connecté</span>
+      </div>
+    </div>
+    <div class="window-controls">
+      <button class="win-btn" id="btnMinimize" title="Réduire">&#x2013;</button>
+      <button class="win-btn" id="btnMaximize" title="Agrandir">&#x25A1;</button>
+      <button class="win-btn win-close" id="btnClose" title="Fermer">&#x2715;</button>
+    </div>
+  </header>
+
+  <div class="app-shell">
+    <!-- Barre latérale -->
+    <aside class="sidebar">
+      <div class="nav-group">
+        <div class="nav-label">INFOMANIAK KDRIVE</div>
+        <button class="nav-item active" data-view="kdrive" data-filter="all">
+          <span class="nav-icon">☁️</span>
+          <span>Tous mes fichiers</span>
+        </button>
+        <button class="nav-item" data-view="kdrive" data-filter="images">
+          <span class="nav-icon">🖼️</span>
+          <span>Photos &amp; Images</span>
+        </button>
+        <button class="nav-item" data-view="kdrive" data-filter="docs">
+          <span class="nav-icon">📄</span>
+          <span>Documents</span>
+        </button>
+        <button class="nav-item" data-view="kdrive" data-filter="media">
+          <span class="nav-icon">🎬</span>
+          <span>Vidéos &amp; Audio</span>
+        </button>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-label">SÉCURITÉ &amp; MOTS DE PASSE</div>
+        <button class="nav-item" data-view="bitwarden">
+          <span class="nav-icon">🔐</span>
+          <span>Coffre Bitwarden</span>
+          <span class="soon-tag">v0.2</span>
+        </button>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-label">APPLICATION</div>
+        <button class="nav-item" data-view="settings">
+          <span class="nav-icon">⚙️</span>
+          <span>Connexion &amp; .env</span>
+        </button>
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="quota-card" id="quotaCard">
+          <div class="quota-header">
+            <span id="driveNameLabel">Espace kDrive</span>
+            <span id="quotaPercentLabel">—</span>
+          </div>
+          <div class="quota-bar-bg">
+            <div class="quota-bar-fill" id="quotaBarFill" style="width: 0%"></div>
+          </div>
+          <div class="quota-sub" id="quotaDetailLabel">Configurez votre compte pour afficher le stockage</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Zone principale -->
+    <main class="main-content" id="dropZone">
+      <!-- Overlay Glisser-Déposer -->
+      <div class="drop-overlay hidden" id="dropOverlay">
+        <div class="drop-box">
+          <div class="drop-icon">☁️⬆️</div>
+          <h3>Relâchez pour sauvegarder sur kDrive</h3>
+          <p>Les fichiers et photos seront envoyés dans le dossier actuel</p>
+        </div>
+      </div>
+
+      <!-- ================================================================ -->
+      <!-- VUE 1 : EXPLORATEUR KDRIVE                                       -->
+      <!-- ================================================================ -->
+      <section class="view-panel" id="viewKdrive">
+        <!-- Barre d'outils supérieure -->
+        <div class="toolbar">
+          <div class="breadcrumb-bar">
+            <button class="icon-btn" id="btnBack" title="Dossier parent" disabled>⬅</button>
+            <button class="icon-btn" id="btnRefresh" title="Actualiser">↻</button>
+            <div class="breadcrumbs" id="breadcrumbs"></div>
+          </div>
+
+          <div class="toolbar-actions">
+            <div class="search-box">
+              <span class="search-icon">🔍</span>
+              <input type="text" id="searchInput" placeholder="Filtrer ce dossier..." />
+            </div>
+
+            <div class="view-switch">
+              <button class="switch-btn active" id="btnGridView" title="Vue Grille">⊞</button>
+              <button class="switch-btn" id="btnListView" title="Vue Liste">☰</button>
+            </div>
+
+            <button class="btn btn-secondary" id="btnNewFolder" title="Créer un sous-dossier">
+              <span>+ Dossier</span>
+            </button>
+            <button class="btn btn-accent-outline" id="btnUploadPhotos" title="Sauvegarder des photos">
+              <span>📸 Photos</span>
+            </button>
+            <button class="btn btn-primary" id="btnUploadFiles">
+              <span>⬆️ Sauvegarder fichiers</span>
+            </button>
+            <button class="btn btn-secondary" id="btnUploadFolder" title="Sauvegarder un dossier entier">
+              <span>📁 Dossier</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- État : Non configuré / Guide de démarrage rapide -->
+        <div class="onboarding-card hidden" id="onboardingCard">
+          <div class="onboarding-badge">🚀 Premier lancement — Configuration rapide</div>
+          <h2>Connectez votre espace Infomaniak kDrive</h2>
+          <p>
+            Vous pouvez renseigner vos identifiants directement dans le fichier <code>.env</code> à la racine du projet,
+            ou cliquer sur le bouton ci-dessous pour les saisir dans l'interface (le fichier <code>.env</code> sera mis à jour automatiquement).
+          </p>
+          <div class="steps-grid">
+            <div class="step-box">
+              <div class="step-num">1</div>
+              <h4>Récupérez votre <code>KDRIVE_ID</code></h4>
+              <p>Ouvrez kDrive sur votre navigateur : regardez le chiffre après <code>/drive/</code> dans l'URL (ex: <code>123456</code>).</p>
+              <button class="link-btn" data-ext="https://ksuite.infomaniak.com/kdrive">Ouvrir kDrive Web ↗</button>
+            </div>
+            <div class="step-box">
+              <div class="step-num">2</div>
+              <h4>Créez un <code>KDRIVE_API_TOKEN</code></h4>
+              <p>Dans votre profil Infomaniak → Développeur → Tokens API, créez un token avec la permission <strong>drive</strong>.</p>
+              <button class="link-btn" data-ext="https://manager.infomaniak.com/v3/ng/profile/user/token/list">Générer un Token API ↗</button>
+            </div>
+          </div>
+          <div class="onboarding-cta">
+            <button class="btn btn-primary btn-lg" id="btnGoSettings">Configurer ma connexion kDrive →</button>
+            <button class="btn btn-secondary btn-lg" id="btnRetryConnect">J'ai modifié le .env, tester la connexion</button>
+          </div>
+        </div>
+
+        <!-- État : Chargement -->
+        <div class="state-box hidden" id="loadingState">
+          <div class="spinner"></div>
+          <p>Synchronisation avec Infomaniak kDrive...</p>
+        </div>
+
+        <!-- État : Erreur -->
+        <div class="error-banner hidden" id="errorState">
+          <div>
+            <strong>Impossible de charger kDrive</strong>
+            <p id="errorMessageText"></p>
+          </div>
+          <div class="error-actions">
+            <button class="btn btn-secondary" id="btnErrorSettings">Vérifier mes variables</button>
+            <button class="btn btn-primary" id="btnErrorRetry">Réessayer</button>
+          </div>
+        </div>
+
+        <!-- État : Dossier vide -->
+        <div class="state-box hidden" id="emptyState">
+          <div class="empty-illustration">📂</div>
+          <h3>Aucun élément à afficher</h3>
+          <p>Glissez-déposez vos photos ou fichiers ici pour les sauvegarder directement sur votre kDrive.</p>
+        </div>
+
+        <!-- Grille / Liste des fichiers -->
+        <div class="files-container grid-mode" id="filesContainer"></div>
+      </section>
+
+      <!-- ================================================================ -->
+      <!-- VUE 2 : MODULE BITWARDEN (APERÇU ROADMAP v0.2.0)                 -->
+      <!-- ================================================================ -->
+      <section class="view-panel hidden" id="viewBitwarden">
+        <div class="module-hero">
+          <div class="soon-pill-large">🔐 Module prévu pour la version v0.2.0</div>
+          <h2>Gestionnaire de mots de passe Bitwarden</h2>
+          <p>
+            L'architecture de <strong>KVault Desktop</strong> est prête pour accueillir votre coffre-fort
+            <strong>Bitwarden</strong> (officiel <code>bitwarden.eu</code> / <code>bitwarden.com</code> ou auto-hébergé <strong>Vaultwarden</strong>).
+          </p>
+
+          <div class="feature-preview-grid">
+            <div class="preview-card">
+              <div class="preview-icon">🔑</div>
+              <h4>Connexion API Key + Master Password</h4>
+              <p>Déverrouillage local chiffré de bout en bout via la CLI officielle Bitwarden sans jamais exposer vos secrets en clair.</p>
+            </div>
+            <div class="preview-card">
+              <div class="preview-icon">📋</div>
+              <h4>Copie rapide &amp; Purge Presse-papiers</h4>
+              <p>Copiez un identifiant, mot de passe ou code TOTP 2FA en un clic avec effacement automatique après 20 secondes.</p>
+            </div>
+            <div class="preview-card">
+              <div class="preview-icon">🛡️</div>
+              <h4>Sauvegarde chiffrée sur kDrive</h4>
+              <p>Export chiffré AES-256 de secours de votre coffre Bitwarden directement dans un dossier dédié de votre kDrive !</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================ -->
+      <!-- VUE 3 : PARAMÈTRES & CONNEXION (.ENV)                            -->
+      <!-- ================================================================ -->
+      <section class="view-panel hidden" id="viewSettings">
+        <div class="settings-wrapper">
+          <div class="settings-header">
+            <h2>Paramètres de connexion kDrive</h2>
+            <p>
+              Les informations saisies ici sont sauvegardées localement et synchronisées avec votre fichier
+              <code id="envPathDisplay">.env</code> (ignoré par Git grâce au <code>.gitignore</code>).
+            </p>
+          </div>
+
+          <form id="settingsForm" class="settings-card">
+            <div class="form-row">
+              <label for="inputMode">Méthode de connexion Infomaniak</label>
+              <select id="inputMode">
+                <option value="api">API REST Officielle Infomaniak (Recommandé — Gratuit &amp; Payant)</option>
+                <option value="webdav">Protocole WebDAV (Uniquement offres kDrive Solo / Pro payantes)</option>
+              </select>
+              <small class="hint">L'API officielle fonctionne sur 100% des comptes Infomaniak (y compris my kSuite gratuit) et affiche le quota disque.</small>
+            </div>
+
+            <div class="form-row">
+              <label for="inputDriveId">Identifiant numérique kDrive (<code>KDRIVE_ID</code>)</label>
+              <input type="text" id="inputDriveId" placeholder="Ex : 123456" autocomplete="off" />
+              <small class="hint">
+                Visible dans l'adresse web de votre kDrive :
+                <code>https://ksuite.infomaniak.com/.../drive/<strong>123456</strong>/files</code>
+                — <button type="button" class="inline-link" data-ext="https://ksuite.infomaniak.com/kdrive">Ouvrir mon kDrive ↗</button>
+              </small>
+            </div>
+
+            <!-- Champs Mode API -->
+            <div id="apiFieldsGroup">
+              <div class="form-row">
+                <label for="inputApiToken">Token API Infomaniak (<code>KDRIVE_API_TOKEN</code>)</label>
+                <input type="password" id="inputApiToken" placeholder="Collez votre Bearer Token Infomaniak ici..." autocomplete="off" />
+                <small class="hint">
+                  Créez un token avec la permission <strong>drive</strong> sur
+                  <button type="button" class="inline-link" data-ext="https://manager.infomaniak.com/v3/ng/profile/user/token/list">Infomaniak Manager → Tokens API ↗</button>
+                </small>
+              </div>
+            </div>
+
+            <!-- Champs Mode WebDAV -->
+            <div id="webdavFieldsGroup" class="hidden">
+              <div class="form-row">
+                <label for="inputEmail">Email du compte Infomaniak (<code>KDRIVE_EMAIL</code>)</label>
+                <input type="email" id="inputEmail" placeholder="prenom.nom@ik.me" autocomplete="off" />
+              </div>
+              <div class="form-row">
+                <label for="inputAppPassword">Mot de passe d'application (<code>KDRIVE_APP_PASSWORD</code>)</label>
+                <input type="password" id="inputAppPassword" placeholder="Mot de passe d'application généré dans Sécurité" autocomplete="off" />
+                <small class="hint">
+                  Si la double authentification (2FA) est activée, créez un mot de passe d'application dans
+                  <button type="button" class="inline-link" data-ext="https://manager.infomaniak.com/v3/ng/profile/user/security/application-passwords">Sécurité → Mots de passe d'application ↗</button>
+                </small>
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary btn-lg" id="btnSaveConfig">
+                💾 Enregistrer &amp; Tester la connexion
+              </button>
+            </div>
+          </form>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Barre flottante de progression d'Upload -->
+  <div class="upload-toast hidden" id="uploadToast">
+    <div class="upload-toast-top">
+      <span id="uploadToastTitle">Sauvegarde en cours...</span>
+      <span id="uploadToastPercent">0%</span>
+    </div>
+    <div class="upload-progress-bg">
+      <div class="upload-progress-fill" id="uploadProgressFill" style="width: 0%"></div>
+    </div>
+    <div class="upload-toast-sub" id="uploadToastSub"></div>
+  </div>
+
+  <!-- Notification Toast -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Modale : Créer un nouveau dossier -->
+  <div class="modal-backdrop hidden" id="folderModal">
+    <div class="modal-card">
+      <h3>📁 Nouveau dossier sur kDrive</h3>
+      <p>Ce dossier sera créé directement dans l'emplacement courant.</p>
+      <input type="text" id="newFolderInput" placeholder="Ex : Photos Vacances 2026" />
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="btnCancelFolder">Annuler</button>
+        <button class="btn btn-primary" id="btnConfirmFolder">Créer le dossier</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modale : Confirmation de suppression -->
+  <div class="modal-backdrop hidden" id="deleteModal">
+    <div class="modal-card">
+      <h3>🗑️ Déplacer vers la corbeille ?</h3>
+      <p id="deleteModalText">Voulez-vous vraiment supprimer cet élément de votre kDrive ?</p>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="btnCancelDelete">Annuler</button>
+        <button class="btn btn-danger" id="btnConfirmDelete">Supprimer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modale : Aperçu Photo / Image (Lightbox) -->
+  <div class="modal-backdrop hidden" id="previewModal">
+    <div class="preview-dialog">
+      <div class="preview-header">
+        <span id="previewTitle">Aperçu photo</span>
+        <div class="preview-actions">
+          <button class="btn btn-primary" id="btnDownloadPreview">⬇️ Télécharger</button>
+          <button class="btn btn-secondary" id="btnClosePreview">Fermer ✕</button>
+        </div>
+      </div>
+      <div class="preview-body">
+        <div class="spinner" id="previewSpinner"></div>
+        <img id="previewImageEl" alt="Aperçu" class="hidden" />
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

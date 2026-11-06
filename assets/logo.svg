@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" fill="none">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="120" y2="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0F172A"/>
+      <stop offset="100%" stop-color="#090D16"/>
+    </linearGradient>
+    <linearGradient id="neonGrad" x1="15" y1="20" x2="105" y2="100" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0098FF"/>
+      <stop offset="55%" stop-color="#00D4FF"/>
+      <stop offset="100%" stop-color="#10B981"/>
+    </linearGradient>
+    <linearGradient id="shieldFill" x1="60" y1="44" x2="60" y2="96" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0098FF" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="#10B981" stop-opacity="0.14"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="112" height="112" rx="28" fill="url(#bgGrad)" stroke="url(#neonGrad)" stroke-width="3"/>
+  <!-- Cloud silhouette -->
+  <path d="M36 74H29C21.82 74 16 68.18 16 61C16 54.48 20.8 49.08 27.06 48.14C29.74 37.16 39.66 29 51.5 29C64.26 29 74.82 38.48 76.46 50.8C77.62 50.46 78.84 50.28 80.1 50.28C87.78 50.28 94 56.5 94 64.18C94 70.1 90.29 75.15 85 77.12"
+        stroke="url(#neonGrad)" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Shield Vault -->
+  <path d="M60 45L81 53.5V69.5C81 83.2 72.05 93.85 60 98C47.95 93.85 39 83.2 39 69.5V53.5L60 45Z"
+        fill="url(#shieldFill)" stroke="url(#neonGrad)" stroke-width="4" stroke-linejoin="round"/>
+  <!-- Keyhole -->
+  <circle cx="60" cy="67" r="5.5" fill="#00E5FF"/>
+  <path d="M57.2 71L55.5 82H64.5L62.8 71H57.2Z" fill="#00E5FF"/>
+</svg>

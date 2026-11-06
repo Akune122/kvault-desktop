@@ -1,0 +1,71 @@
+{
+  "name": "kvault-desktop",
+  "productName": "KVault Desktop",
+  "version": "0.1.0",
+  "description": "Application Windows tout-en-un : Explorateur & Sauvegarde Cloud Infomaniak kDrive + Coffre-fort Bitwarden",
+  "main": "src/main/main.js",
+  "author": "Loïc Zaercher (Akune122)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Akune122/kvault-desktop.git"
+  },
+  "homepage": "https://github.com/Akune122/kvault-desktop#readme",
+  "bugs": {
+    "url": "https://github.com/Akune122/kvault-desktop/issues"
+  },
+  "scripts": {
+    "postinstall": "node scripts/ensure-electron.js",
+    "start": "node scripts/start-electron.js",
+    "dev": "node scripts/start-electron.js --dev",
+    "build:exe": "electron-builder --win portable",
+    "build:installer": "electron-builder --win nsis"
+  },
+  "keywords": [
+    "infomaniak",
+    "kdrive",
+    "bitwarden",
+    "cloud-storage",
+    "backup",
+    "electron",
+    "windows",
+    "desktop-app"
+  ],
+  "dependencies": {
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "electron": "^33.3.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.loiczaercher.kvault",
+    "productName": "KVault Desktop",
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      ".env.example",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": ".env.example",
+        "to": ".env.example"
+      }
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "icon": "assets/icon.png"
+    },
+    "portable": {
+      "artifactName": "KVault-Desktop-${version}-Portable.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "KVault-Desktop-${version}-Setup.exe"
+    }
+  }
+}

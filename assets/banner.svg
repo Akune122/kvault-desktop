@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 260" width="960" height="260" fill="none">
+  <defs>
+    <linearGradient id="bannerBg" x1="0" y1="0" x2="960" y2="260" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#070B14"/>
+      <stop offset="50%" stop-color="#0F172A"/>
+      <stop offset="100%" stop-color="#091526"/>
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0098FF"/>
+      <stop offset="50%" stop-color="#00E5FF"/>
+      <stop offset="100%" stop-color="#10B981"/>
+    </linearGradient>
+    <radialGradient id="glow1" cx="0.2" cy="0.5" r="0.45">
+      <stop offset="0%" stop-color="#0098FF" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#0098FF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow2" cx="0.82" cy="0.35" r="0.4">
+      <stop offset="0%" stop-color="#10B981" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#10B981" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="960" height="260" rx="22" fill="url(#bannerBg)"/>
+  <rect width="960" height="260" rx="22" fill="url(#glow1)"/>
+  <rect width="960" height="260" rx="22" fill="url(#glow2)"/>
+  <rect x="1.5" y="1.5" width="957" height="257" rx="20.5" stroke="url(#accentGrad)" stroke-opacity="0.35" stroke-width="2"/>
+
+  <!-- Subtle Grid Lines -->
+  <g stroke="#38BDF8" stroke-opacity="0.06" stroke-width="1">
+    <line x1="0" y1="65" x2="960" y2="65"/>
+    <line x1="0" y1="130" x2="960" y2="130"/>
+    <line x1="0" y1="195" x2="960" y2="195"/>
+    <line x1="240" y1="0" x2="240" y2="260"/>
+    <line x1="480" y1="0" x2="480" y2="260"/>
+    <line x1="720" y1="0" x2="720" y2="260"/>
+  </g>
+
+  <!-- App Squircle Icon -->
+  <g transform="translate(68, 52)">
+    <rect x="0" y="0" width="156" height="156" rx="36" fill="#0B1324" stroke="url(#accentGrad)" stroke-width="3.5"/>
+    <path d="M46 96H37C27.6 96 20 88.4 20 79C20 70.5 26.2 63.4 34.4 62.2C37.9 47.9 50.8 37.2 66.2 37.2C82.8 37.2 96.6 49.6 98.7 65.6C100.2 65.2 101.8 65 103.5 65C113.5 65 121.6 73.1 121.6 83.1C121.6 90.8 116.7 97.4 109.8 100"
+          stroke="url(#accentGrad)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M78 58L105 69V90C105 107.8 93.4 121.7 78 127C62.6 121.7 51 107.8 51 90V69L78 58Z"
+          fill="#0098FF" fill-opacity="0.2" stroke="url(#accentGrad)" stroke-width="5" stroke-linejoin="round"/>
+    <circle cx="78" cy="86.5" r="7" fill="#00E5FF"/>
+    <path d="M74.4 91.5L72.2 106H83.8L81.6 91.5H74.4Z" fill="#00E5FF"/>
+  </g>
+
+  <!-- Title & Tagline -->
+  <text x="256" y="114" fill="#F8FAFC" font-family="Segoe UI, Inter, system-ui, sans-serif" font-size="48" font-weight="800" letter-spacing="-1">
+    KVault <tspan fill="url(#accentGrad)">Desktop</tspan>
+  </text>
+  <text x="258" y="152" fill="#94A3B8" font-family="Segoe UI, Inter, system-ui, sans-serif" font-size="19" font-weight="500">
+    Hub Personnel Windows • Cloud Infomaniak kDrive &amp; Coffre-fort Bitwarden
+  </text>
+
+  <!-- Feature Pills -->
+  <g transform="translate(258, 176)" font-family="Segoe UI, Inter, system-ui, sans-serif" font-size="13" font-weight="600">
+    <rect x="0" y="0" width="164" height="32" rx="16" fill="#0098FF" fill-opacity="0.15" stroke="#0098FF" stroke-opacity="0.45"/>
+    <text x="82" y="21" fill="#38BDF8" text-anchor="middle">☁️ Infomaniak kDrive</text>
+
+    <rect x="178" y="0" width="182" height="32" rx="16" fill="#10B981" fill-opacity="0.14" stroke="#10B981" stroke-opacity="0.45"/>
+    <text x="269" y="21" fill="#34D399" text-anchor="middle">🔐 Bitwarden (v0.2.0)</text>
+
+    <rect x="374" y="0" width="158" height="32" rx="16" fill="#6366F1" fill-opacity="0.15" stroke="#818CF8" stroke-opacity="0.45"/>
+    <text x="453" y="21" fill="#A5B4FC" text-anchor="middle">🪟 Windows .EXE</text>
+  </g>
+</svg>
