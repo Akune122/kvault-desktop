@@ -60,7 +60,7 @@
     <text x="82" y="21" fill="#38BDF8" text-anchor="middle">☁️ Infomaniak kDrive</text>
 
     <rect x="178" y="0" width="182" height="32" rx="16" fill="#10B981" fill-opacity="0.14" stroke="#10B981" stroke-opacity="0.45"/>
-    <text x="269" y="21" fill="#34D399" text-anchor="middle">🔐 Bitwarden (v0.2.0)</text>
+    <text x="269" y="21" fill="#34D399" text-anchor="middle">🔐 Bitwarden Vault</text>
 
     <rect x="374" y="0" width="158" height="32" rx="16" fill="#6366F1" fill-opacity="0.15" stroke="#818CF8" stroke-opacity="0.45"/>
     <text x="453" y="21" fill="#A5B4FC" text-anchor="middle">🪟 Windows .EXE</text>

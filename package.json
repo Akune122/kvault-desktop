@@ -1,7 +1,7 @@
 {
   "name": "kvault-desktop",
   "productName": "KVault Desktop",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Application Windows tout-en-un : Explorateur & Sauvegarde Cloud Infomaniak kDrive + Coffre-fort Bitwarden",
   "main": "src/main/main.js",
   "author": "Loïc Zaercher (Akune122)",
@@ -18,8 +18,9 @@
     "postinstall": "node scripts/ensure-electron.js",
     "start": "node scripts/start-electron.js",
     "dev": "node scripts/start-electron.js --dev",
-    "build:exe": "electron-builder --win portable",
-    "build:installer": "electron-builder --win nsis"
+    "build:exe": "node scripts/prepare-build.js && electron-builder --win portable",
+    "build:installer": "node scripts/prepare-build.js && electron-builder --win nsis",
+    "release:github": "node scripts/publish-release.js"
   },
   "keywords": [
     "infomaniak",
@@ -32,7 +33,14 @@
     "desktop-app"
   ],
   "dependencies": {
-    "dotenv": "^16.4.7"
+    "@bitwarden/cli": "^2026.10.1",
+    "dotenv": "^16.4.7",
+    "encoding": "^0.1.14",
+    "koa-compose": "^4.1.0",
+    "side-channel-list": "^1.0.1",
+    "side-channel-map": "^1.0.1",
+    "side-channel-weakmap": "^1.0.2",
+    "tldts-core": "^7.4.20"
   },
   "devDependencies": {
     "electron": "^33.3.1",

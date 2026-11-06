@@ -1,17 +1,28 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { loadConfig, saveConfig } = require('./config');
 const { createKDriveClient, getRootFolderId, isConfigured } = require('../services/kdrive-manager');
+const { BitwardenService } = require('../services/bitwarden-service');
 
 let mainWindow = null;
+let isAppUnlocked = false;
+let clipboardClearTimer = null;
+let bitwardenService = null;
+
+function getBitwarden() {
+  if (!bitwardenService) {
+    bitwardenService = new BitwardenService(app);
+  }
+  return bitwardenService;
+}
 
 function createMainWindow() {
   mainWindow = new BrowserWindow({
-    width: 1260,
-    height: 820,
-    minWidth: 960,
-    minHeight: 640,
+    width: 1300,
+    height: 850,
+    minWidth: 980,
+    minHeight: 660,
     frame: false,
     backgroundColor: '#070B14',
     icon: path.join(__dirname, '..', '..', 'assets', 'icon.png'),
@@ -42,7 +53,7 @@ function collectFilesFromFolder(localFolderPath) {
 }
 
 // ============================================================================
-// IPC : Contrôles de fenêtre & Utilitaires
+// IPC : Contrôles de fenêtre, Presse-papiers sécurisé & Utilitaires
 // ============================================================================
 ipcMain.handle('window:minimize', () => {
   if (mainWindow) mainWindow.minimize();
@@ -68,13 +79,95 @@ ipcMain.handle('shell:openExternal', async (_event, url) => {
   }
 });
 
+ipcMain.handle('clipboard:copy', (_event, { text, autoClearMs = 0 }) => {
+  const secret = String(text || '');
+  clipboard.writeText(secret);
+
+  if (clipboardClearTimer) {
+    clearTimeout(clipboardClearTimer);
+    clipboardClearTimer = null;
+  }
+
+  if (autoClearMs > 0 && secret) {
+    clipboardClearTimer = setTimeout(() => {
+      try {
+        if (clipboard.readText() === secret) {
+          clipboard.clear();
+        }
+      } catch (_) {
+        // Ignore
+      }
+    }, autoClearMs);
+  }
+
+  return { ok: true };
+});
+
+// ============================================================================
+// IPC : Verrouillage par Code / Mot de passe de l'application (APP_LOCK_CODE)
+// ============================================================================
+ipcMain.handle('auth:getLockInfo', () => {
+  const { config } = loadConfig(app);
+  const currentCode = String(config.APP_LOCK_CODE || '0000');
+  return {
+    unlocked: isAppUnlocked,
+    isDefaultCode: currentCode === '0000'
+  };
+});
+
+ipcMain.handle('auth:unlockApp', (_event, inputCode) => {
+  const { config } = loadConfig(app);
+  const expected = String(config.APP_LOCK_CODE || '0000');
+  const candidate = String(inputCode ?? '');
+
+  if (candidate === expected) {
+    isAppUnlocked = true;
+    return { ok: true, isDefaultCode: expected === '0000' };
+  }
+
+  return { ok: false, error: 'Code ou mot de passe incorrect.' };
+});
+
+ipcMain.handle('auth:lockApp', () => {
+  isAppUnlocked = false;
+  const { config } = loadConfig(app);
+  return {
+    ok: true,
+    isDefaultCode: String(config.APP_LOCK_CODE || '0000') === '0000'
+  };
+});
+
+ipcMain.handle('auth:changeLockCode', (_event, { currentCode, newCode }) => {
+  const { config } = loadConfig(app);
+  const expected = String(config.APP_LOCK_CODE || '0000');
+
+  if (String(currentCode ?? '') !== expected) {
+    return { ok: false, error: 'Le code actuel saisi est incorrect.' };
+  }
+
+  const trimmedNew = String(newCode ?? '').trim();
+  if (trimmedNew.length < 4) {
+    return { ok: false, error: 'Le nouveau code/mot de passe doit contenir au moins 4 caractères.' };
+  }
+
+  saveConfig(app, { APP_LOCK_CODE: trimmedNew });
+  return {
+    ok: true,
+    isDefaultCode: trimmedNew === '0000'
+  };
+});
+
 // ============================================================================
 // IPC : Configuration (.env & userData)
 // ============================================================================
 ipcMain.handle('config:get', () => {
   const { config, envPath } = loadConfig(app);
+  const safeConfig = { ...config };
+  delete safeConfig.APP_LOCK_CODE; // Ne jamais exposer le code de verrouillage en clair au front
+
   return {
-    config,
+    config: safeConfig,
+    isDefaultLockCode: String(config.APP_LOCK_CODE || '0000') === '0000',
     envPath,
     configured: isConfigured(config),
     rootId: getRootFolderId(config),
@@ -83,9 +176,15 @@ ipcMain.handle('config:get', () => {
 });
 
 ipcMain.handle('config:save', (_event, newValues) => {
-  const updated = saveConfig(app, newValues);
+  const cleanValues = { ...(newValues || {}) };
+  delete cleanValues.APP_LOCK_CODE; // Modifiable uniquement via auth:changeLockCode
+
+  const updated = saveConfig(app, cleanValues);
+  const safeUpdated = { ...updated };
+  delete safeUpdated.APP_LOCK_CODE;
+
   return {
-    config: updated,
+    config: safeUpdated,
     configured: isConfigured(updated),
     rootId: getRootFolderId(updated)
   };
@@ -170,7 +269,6 @@ ipcMain.handle('kdrive:pickAndUploadFolder', async (_event, { parentId }) => {
     const { config } = loadConfig(app);
     const client = createKDriveClient(config);
 
-    // Crée le dossier correspondant sur kDrive puis envoie ses fichiers dedans
     const createdFolder = await client.createFolder(parentId || getRootFolderId(config), folderName);
     const targetFolderId = createdFolder.id || parentId;
     const filesInside = collectFilesFromFolder(localFolder);
@@ -284,6 +382,128 @@ ipcMain.handle('kdrive:delete', async (_event, { fileId }) => {
   } catch (err) {
     return { ok: false, error: err.message };
   }
+});
+
+// ============================================================================
+// IPC : Coffre-fort Bitwarden / Vaultwarden (v0.2.0)
+// ============================================================================
+ipcMain.handle('bw:status', async () => {
+  try {
+    const status = await getBitwarden().getStatus();
+    return { ok: true, status };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('bw:loginAndUnlock', async (_event, payload) => {
+  try {
+    const { config } = loadConfig(app);
+    const serverUrl = payload?.serverUrl || config.BITWARDEN_SERVER_URL || 'https://vault.bitwarden.eu';
+    const clientId = payload?.clientId || config.BITWARDEN_CLIENT_ID || '';
+    const clientSecret = payload?.clientSecret || config.BITWARDEN_CLIENT_SECRET || '';
+    const email = payload?.email || config.BITWARDEN_EMAIL || '';
+
+    // Sauvegarde serveur & email (et clés API si saisies) pour éviter de les retaper
+    const toPersist = { BITWARDEN_SERVER_URL: serverUrl };
+    if (email) toPersist.BITWARDEN_EMAIL = email;
+    if (payload?.saveApiKeys && clientId && clientSecret) {
+      toPersist.BITWARDEN_CLIENT_ID = clientId;
+      toPersist.BITWARDEN_CLIENT_SECRET = clientSecret;
+    }
+    saveConfig(app, toPersist);
+
+    const res = await getBitwarden().loginAndUnlock({
+      authMode: payload?.authMode || 'apikey',
+      serverUrl,
+      clientId,
+      clientSecret,
+      email,
+      masterPassword: payload?.masterPassword || '',
+      twoFactorCode: payload?.twoFactorCode || ''
+    });
+
+    return { ok: true, ...res };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('bw:unlock', async (_event, { masterPassword }) => {
+  try {
+    const res = await getBitwarden().unlock(masterPassword);
+    return { ok: true, ...res };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('bw:listItems', async () => {
+  try {
+    const items = await getBitwarden().listItems();
+    return { ok: true, items };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('bw:sync', async () => {
+  try {
+    const res = await getBitwarden().syncVault();
+    return { ok: true, ...res };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('bw:getTotp', async (_event, { itemId }) => {
+  try {
+    const code = await getBitwarden().getTotpCode(itemId);
+    return { ok: true, code };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('bw:createLogin', async (_event, itemData) => {
+  try {
+    const created = await getBitwarden().createLoginItem(itemData);
+    return { ok: true, item: created };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('bw:deleteItem', async (_event, { itemId }) => {
+  try {
+    await getBitwarden().deleteVaultItem(itemId);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('bw:lock', async () => {
+  try {
+    const status = await getBitwarden().lockVault();
+    return { ok: true, status };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('bw:logout', async () => {
+  try {
+    const status = await getBitwarden().logoutVault();
+    return { ok: true, status };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('bw:generatePassword', (_event, options) => {
+  const password = getBitwarden().generatePassword(options);
+  return { ok: true, password };
 });
 
 app.whenReady().then(() => {

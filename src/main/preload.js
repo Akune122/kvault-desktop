@@ -1,11 +1,20 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('kvault', {
-  // Contrôles de fenêtre
+  // Contrôles de fenêtre & Utilitaires
   minimizeWindow: () => ipcRenderer.invoke('window:minimize'),
   toggleMaximizeWindow: () => ipcRenderer.invoke('window:toggleMaximize'),
   closeWindow: () => ipcRenderer.invoke('window:close'),
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
+  copyToClipboard: (text, autoClearMs = 0) =>
+    ipcRenderer.invoke('clipboard:copy', { text, autoClearMs }),
+
+  // Verrouillage de l'application (APP_LOCK_CODE — défaut 0000)
+  getLockInfo: () => ipcRenderer.invoke('auth:getLockInfo'),
+  unlockApp: (code) => ipcRenderer.invoke('auth:unlockApp', code),
+  lockApp: () => ipcRenderer.invoke('auth:lockApp'),
+  changeLockCode: (currentCode, newCode) =>
+    ipcRenderer.invoke('auth:changeLockCode', { currentCode, newCode }),
 
   // Configuration (.env + stockage local)
   getConfig: () => ipcRenderer.invoke('config:get'),
@@ -32,10 +41,22 @@ contextBridge.exposeInMainWorld('kvault', {
     return file?.path || '';
   },
 
-  // Événement de progression d'upload
   onUploadProgress: (callback) => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on('kdrive:uploadProgress', listener);
     return () => ipcRenderer.removeListener('kdrive:uploadProgress', listener);
-  }
+  },
+
+  // Bitwarden / Vaultwarden (v0.2.0)
+  bwStatus: () => ipcRenderer.invoke('bw:status'),
+  bwLoginAndUnlock: (payload) => ipcRenderer.invoke('bw:loginAndUnlock', payload),
+  bwUnlock: (masterPassword) => ipcRenderer.invoke('bw:unlock', { masterPassword }),
+  bwListItems: () => ipcRenderer.invoke('bw:listItems'),
+  bwSync: () => ipcRenderer.invoke('bw:sync'),
+  bwGetTotp: (itemId) => ipcRenderer.invoke('bw:getTotp', { itemId }),
+  bwCreateLogin: (itemData) => ipcRenderer.invoke('bw:createLogin', itemData),
+  bwDeleteItem: (itemId) => ipcRenderer.invoke('bw:deleteItem', { itemId }),
+  bwLock: () => ipcRenderer.invoke('bw:lock'),
+  bwLogout: () => ipcRenderer.invoke('bw:logout'),
+  bwGeneratePassword: (options) => ipcRenderer.invoke('bw:generatePassword', options)
 });

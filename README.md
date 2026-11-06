@@ -4,108 +4,101 @@
 
 <br />
 
-[![Version](https://img.shields.io/badge/version-0.1.0-0098FF?style=for-the-badge&logo=semanticrelease&logoColor=white)](./CHANGELOG.md)
-[![Platform](https://img.shields.io/badge/Windows-10%20%2F%2011%20(.exe)-0078D6?style=for-the-badge&logo=windows&logoColor=white)](#compilation-en-exécutable-windows-exe)
+[![Version](https://img.shields.io/badge/version-0.2.0-0098FF?style=for-the-badge&logo=semanticrelease&logoColor=white)](https://github.com/Akune122/kvault-desktop/releases)
+[![Platform](https://img.shields.io/badge/Windows-10%20%2F%2011%20(.exe)-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Akune122/kvault-desktop/releases)
 [![Electron](https://img.shields.io/badge/Electron-33-47848F?style=for-the-badge&logo=electron&logoColor=white)](https://www.electronjs.org/)
-[![Infomaniak kDrive](https://img.shields.io/badge/Cloud-Infomaniak%20kDrive-00E5FF?style=for-the-badge&logo=icloud&logoColor=white)](#configuration-du-compte-kdrive-env)
-[![Bitwarden Roadmap](https://img.shields.io/badge/Vault-Bitwarden%20(v0.2)-10B981?style=for-the-badge&logo=bitwarden&logoColor=white)](#feuille-de-route--versions-roadmap)
+[![Infomaniak kDrive](https://img.shields.io/badge/Cloud-Infomaniak%20kDrive-00E5FF?style=for-the-badge&logo=icloud&logoColor=white)](#1-configuration-infomaniak-kdrive)
+[![Bitwarden](https://img.shields.io/badge/Vault-Bitwarden%20%2F%20Vaultwarden-10B981?style=for-the-badge&logo=bitwarden&logoColor=white)](#2-configuration-bitwarden--vaultwarden)
 [![License](https://img.shields.io/badge/License-MIT-818CF8?style=for-the-badge)](./LICENSE)
 
 <p align="center">
-  <strong>Application Desktop Windows tout-en-un combinant un explorateur &amp; outil de sauvegarde directe pour <a href="https://www.infomaniak.com/fr/ksuite/kdrive">Infomaniak kDrive</a> et un futur coffre-fort de mots de passe <a href="https://bitwarden.com/">Bitwarden</a>.</strong>
+  <strong>Hub personnel sécurisé sur Windows (<code>.exe</code>) réunissant un explorateur &amp; outil de sauvegarde <a href="https://www.infomaniak.com/fr/ksuite/kdrive">Infomaniak kDrive</a> et un gestionnaire de mots de passe <a href="https://bitwarden.com/">Bitwarden / Vaultwarden</a> protégé par code d'accès.</strong>
 </p>
 
 </div>
 
 ---
 
-## ✨ Présentation du projet
+## 📥 Téléchargement direct (`.exe` Windows)
 
-**KVault Desktop** est une application lourde Windows (`.exe`) pensée comme un **hub personnel sécurisé** permettant de centraliser :
-1. **Vos fichiers, documents et photos sur Infomaniak kDrive** *(disponible dès la `v0.1.0`)* — naviguez dans vos dossiers cloud, prévisualisez vos photos et sauvegardez des fichiers ou dossiers entiers par simple *Glisser-Déposer* depuis Windows.
-2. **Vos mots de passe et accès Bitwarden / Vaultwarden** *(prévu en `v0.2.0`)* — consultez, recherchez et copiez vos identifiants chiffrés depuis la même interface.
+<div align="center">
+
+[![Télécharger KVault Desktop v0.2.0 (.exe)](https://img.shields.io/badge/%E2%AC%87%EF%B8%8F_T%C3%A9l%C3%A9charger_KVault--Desktop--0.2.0--Portable.exe-0098FF?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Akune122/kvault-desktop/releases/download/v0.2.0/KVault-Desktop-0.2.0-Portable.exe)
+
+</div>
+
+Vous souhaitez utiliser l'application directement sans installer Node.js ?
+1. Cliquez sur le bouton ci-dessus ou rendez-vous dans l'onglet **[Releases GitHub](https://github.com/Akune122/kvault-desktop/releases/tag/v0.2.0)** pour télécharger **`KVault-Desktop-0.2.0-Portable.exe`**.
+2. Lancez l'exécutable : le **code de déverrouillage initial par défaut est `0000`**.
+3. Rendez-vous dans **⚙️ Paramètres & Sécurité** dans l'application pour définir votre propre code/mot de passe et connecter votre **kDrive** ainsi que votre coffre **Bitwarden** !
 
 ---
 
-## 🚀 Fonctionnalités (`v0.1.0` — Module kDrive)
+## ✨ Fonctionnalités principales (`v0.2.0`)
 
-| Fonctionnalité | Description |
+| Module | Fonctionnalités incluses |
 | :--- | :--- |
-| ☁️ **Double moteur kDrive** | Connexion via l'**API REST officielle Infomaniak (`v2`/`v3`)** *(compatible 100% des offres, gratuites et payantes)* ou via **WebDAV**. |
-| 📂 **Explorateur complet** | Navigation rapide dans les dossiers et sous-dossiers, fil d'Ariane (*Breadcrumbs*), Vue Grille & Vue Liste, recherche instantanée. |
-| 📸 **Mode Photos & Aperçu** | Filtres dédiés (*Photos, Documents, Médias*) et visionneuse **Lightbox HD** intégrée pour prévisualiser vos images sans les télécharger. |
-| ⬆️ **Sauvegarde Drag & Drop** | Glissez-déposez vos photos/fichiers depuis l'Explorateur Windows ou sauvegardez un dossier local entier en un clic avec barre de progression. |
-| 📊 **Suivi du stockage** | Jauge d'espace disque kDrive en temps réel dans la barre latérale. |
-| 🔒 **Secrets protégés** | Configuration propre via `.env` (ignoré par Git) ou directement depuis l'onglet **Connexion & `.env`** intégré à l'application. |
+| 🛡️ **Verrouillage App (`0000`)** | Écran de verrouillage au démarrage avec pavé numérique + clavier. Code par défaut `0000` (`APP_LOCK_CODE`), modifiable directement dans l'interface par chaque utilisateur du `.exe`. |
+| ☁️ **Infomaniak kDrive** | Explorateur complet (API REST officielle `v2`/`v3` + WebDAV), sauvegarde *Drag & Drop* de photos/fichiers/dossiers, visionneuse Lightbox HD, jauge d'espace disque en direct. |
+| 🔐 **Coffre Bitwarden** | Déchiffrement 100 % local (`bitwarden.eu`, `bitwarden.com` ou **Vaultwarden**), connexion Clé API ou Email/2FA, recherche rapide, ajout/suppression d'identifiants, codes dynamiques **2FA TOTP**. |
+| 📋 **Presse-papiers & Générateur** | Copie rapide des mots de passe avec **purge automatique du presse-papiers après 20 secondes** + générateur cryptographique de mots de passe forts (8 à 64 caractères). |
 
 ---
 
-## 🛠️ Installation & Démarrage rapide
+## 🛠️ Installation développeur (Code source)
 
 ### Prérequis
 - **Windows 10 / 11**
 - **[Node.js](https://nodejs.org/)** `v18+` (testé avec `v24`) et `npm`
 
-### 1. Cloner le dépôt & installer les dépendances
 ```powershell
 git clone https://github.com/Akune122/kvault-desktop.git
 cd kvault-desktop
 npm install
-```
-
-### 2. Configurer vos identifiants kDrive
-Copiez le modèle `.env.example` en `.env` (déjà créé localement) et renseignez vos 2 variables Infomaniak (voir le guide détaillé juste en dessous) :
-```powershell
 Copy-Item .env.example .env
-```
-
-### 3. Lancer l'application
-```powershell
 npm start
 ```
 
 ---
 
-## 🔑 Configuration du compte kDrive (`.env`)
+## ⚙️ Configuration (`.env` ou Interface de l'application)
 
-Ouvrez le fichier **`.env`** à la racine du projet (ou passez directement par le menu **⚙️ Connexion & .env** dans l'application) :
+Toutes les variables peuvent être renseignées soit dans le fichier **`.env`** (ignoré par Git), soit directement depuis le menu **⚙️ Paramètres & Sécurité** de l'application :
 
 ```ini
+# Code de verrouillage au lancement de l'application (défaut : 0000)
+APP_LOCK_CODE=0000
+
+# --- MODULE 1 : INFOMANIAK KDRIVE ---
 KDRIVE_CONNECTION_MODE=api
 KDRIVE_ID=123456
-KDRIVE_API_TOKEN=votre_token_api_infomaniak_ici
+KDRIVE_API_TOKEN=votre_token_api_infomaniak
+
+# --- MODULE 2 : BITWARDEN / VAULTWARDEN ---
+BITWARDEN_SERVER_URL=https://vault.bitwarden.eu
+BITWARDEN_EMAIL=vous@exemple.com
+BITWARDEN_CLIENT_ID=user.xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+BITWARDEN_CLIENT_SECRET=votre_client_secret_bitwarden
 ```
 
-### Où trouver ces 2 valeurs sur Infomaniak ? (2 minutes)
+### 1. Configuration Infomaniak kDrive
+- **`KDRIVE_ID`** : ouvrez [kDrive Web](https://ksuite.infomaniak.com/kdrive) et copiez les chiffres situés après `/drive/` dans l'URL (`.../drive/123456/files`).
+- **`KDRIVE_API_TOKEN`** : générez un token avec la permission **`drive`** dans [Infomaniak Manager → Tokens API](https://manager.infomaniak.com/v3/ng/profile/user/token/list).
 
-1. **`KDRIVE_ID`** *(Identifiant numérique de votre Drive)* :
-   - Ouvrez votre [kDrive Web](https://ksuite.infomaniak.com/kdrive) dans votre navigateur.
-   - Regardez l'URL dans la barre d'adresse : `https://ksuite.infomaniak.com/.../drive/123456/files`
-   - Le nombre juste après `/drive/` (ici `123456`) est votre **`KDRIVE_ID`**.
-
-2. **`KDRIVE_API_TOKEN`** *(Jeton d'accès sécurisé)* :
-   - Rendez-vous dans [Infomaniak Manager → Tokens API](https://manager.infomaniak.com/v3/ng/profile/user/token/list).
-   - Cliquez sur **Créer un token**.
-   - Donnez-lui le nom `KVault Desktop`, sélectionnez la permission / scope **`drive`** (*Gestion de kDrive*), puis validez.
-   - Copiez le token généré dans `KDRIVE_API_TOKEN`.
-
-> [!TIP]
-> **Alternative WebDAV** : Si vous préférez utiliser WebDAV (disponible sur les offres payantes kDrive Solo / Pro), passez `KDRIVE_CONNECTION_MODE=webdav` et renseignez `KDRIVE_EMAIL` ainsi qu'un mot de passe d'application dans `KDRIVE_APP_PASSWORD`.
+### 2. Configuration Bitwarden / Vaultwarden
+- Sur votre coffre web Bitwarden (**Paramètres → Sécurité → Clés → Voir la clé API**), récupérez votre `client_id` et votre `client_secret` *(recommandé : évite les blocages Captcha et fonctionne avec la 2FA)*.
+- **Sécurité Zero-Knowledge** : votre **Mot de passe maître Bitwarden** n'est **jamais** stocké dans `.env` ni sur le disque — il vous est demandé uniquement lors du déverrouillage en mémoire vive.
 
 ---
 
-## 📦 Compilation en exécutable Windows (`.exe`)
-
-Pour générer votre application autonome **`.exe`** (portable, prête à être lancée sur Windows sans terminal) :
+## 📦 Générer l'exécutable Windows (`.exe`)
 
 ```powershell
 npm run build:exe
 ```
 
-Une fois la compilation terminée, récupérez votre exécutable dans le dossier **`dist/`** :
-- `dist/KVault-Desktop-0.1.0-Portable.exe`
-
-*(Vous pouvez également générer un installateur Windows classique avec `npm run build:installer`).*
+L'exécutable autonome est généré dans :
+- `dist/KVault-Desktop-0.2.0-Portable.exe`
 
 ---
 
@@ -114,42 +107,43 @@ Une fois la compilation terminée, récupérez votre exécutable dans le dossier
 ```text
 kvault-desktop/
 ├── assets/
-│   ├── banner.svg             # Bannière officielle GitHub
-│   ├── icon.png               # Icône haute résolution de l'application (.exe)
-│   └── logo.svg               # Logo vectoriel KVault
+│   ├── banner.svg               # Bannière officielle GitHub
+│   ├── icon.png                 # Icône haute résolution Windows (.exe)
+│   └── logo.svg                 # Logo vectoriel KVault
+├── scripts/
+│   ├── ensure-electron.js       # Vérification & extraction du runtime Electron
+│   ├── prepare-build.js         # Préparation Windows des outils d'icône (.exe)
+│   ├── publish-release.js       # Publication automatisée de Release GitHub + upload .exe
+│   └── start-electron.js        # Lanceur propre isolé des variables IDE
 ├── src/
 │   ├── main/
-│   │   ├── config.js          # Lecture/écriture sécurisée (.env + profil local)
-│   │   ├── main.js            # Processus principal Electron & gestionnaires IPC
-│   │   └── preload.js         # Pont sécurisé ContextBridge (isolation activée)
+│   │   ├── config.js            # Gestion hybride .env + profil local userData
+│   │   ├── main.js              # Processus principal Electron, IPC & sécurité code PIN
+│   │   └── preload.js           # Pont ContextBridge sécurisé
 │   ├── services/
-│   │   ├── kdrive-api.js      # Client REST API officiel Infomaniak kDrive (v2/v3)
-│   │   ├── kdrive-webdav.js   # Client WebDAV Infomaniak natif
-│   │   └── kdrive-manager.js  # Façade unifiée multi-protocole
+│   │   ├── bitwarden-service.js # Moteur local chiffré Bitwarden / Vaultwarden
+│   │   ├── kdrive-api.js        # Client REST API officiel Infomaniak kDrive (v2/v3)
+│   │   ├── kdrive-webdav.js     # Client WebDAV Infomaniak natif
+│   │   └── kdrive-manager.js    # Façade multi-protocole kDrive
 │   └── renderer/
-│       ├── index.html         # Interface utilisateur Desktop
-│       ├── styles.css         # Thème Dark Glassmorphism
-│       └── app.js             # Logique explorateur, Drag & Drop, aperçu photos
-├── .env.example               # Modèle de configuration documenté pour GitHub
-├── .gitignore                 # Exclut .env, node_modules/ et dist/
-├── CHANGELOG.md               # Historique des versions (SemVer)
-├── LICENSE                    # Licence MIT
-└── package.json               # Scripts & configuration electron-builder
+│       ├── index.html           # Interface Desktop (Lock screen, kDrive, Bitwarden, Settings)
+│       ├── styles.css           # Thème Dark Glassmorphism
+│       └── app.js               # Logique frontend complète
+├── .env.example                 # Modèle de configuration documenté
+├── CHANGELOG.md                 # Historique des versions (SemVer)
+└── package.json                 # Configuration Electron & electron-builder
 ```
 
 ---
 
-## 🗺️ Feuille de route & Versions (Roadmap)
+## 🗺️ Feuille de route (Roadmap)
 
 - [x] **`v0.1.0` — Fondation & Connecteur Infomaniak kDrive**
-  - Interface Desktop Windows (`.exe`), explorateur de dossiers, upload photos/fichiers en Drag & Drop, aperçu Lightbox HD, jauge de quota, support API REST & WebDAV.
-- [ ] **`v0.2.0` — Intégration Coffre-fort Bitwarden / Vaultwarden**
-  - Connexion chiffrée au coffre Bitwarden, recherche rapide de mots de passe, copie sécurisée d'identifiants & codes 2FA (TOTP), générateur de mots de passe forts.
-- [ ] **`v0.3.0` — Sauvegardes automatisées & Synchronisation**
-  - Planificateur de sauvegarde automatique de dossiers locaux Windows (ex: *Mes Images*, *Documents*) vers kDrive + export chiffré du coffre Bitwarden sur kDrive.
+- [x] **`v0.2.0` — Coffre-fort Bitwarden / Vaultwarden & Verrouillage Application (`APP_LOCK_CODE`)**
+- [ ] **`v0.3.0` — Synchronisation programmée & Backup chiffré automatique vers kDrive**
 
 ---
 
 <div align="center">
-  <sub>Développé par <strong>Loïc Zaercher</strong> • Projet IT Open-Source sous licence <a href="./LICENSE">MIT</a></sub>
+  <sub>Développé par <strong>Loïc Zaercher (<a href="https://github.com/Akune122">Akune122</a>)</strong> • Licence <a href="./LICENSE">MIT</a></sub>
 </div>

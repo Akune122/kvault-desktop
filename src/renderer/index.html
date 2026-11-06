@@ -13,18 +13,64 @@
     <div class="titlebar-drag">
       <img src="../../assets/logo.svg" alt="KVault" class="titlebar-logo" />
       <span class="titlebar-title">KVault <span class="accent-text">Desktop</span></span>
-      <span class="version-pill" id="versionPill">v0.1.0</span>
+      <span class="version-pill" id="versionPill">v0.2.0</span>
       <div class="connection-badge disconnected" id="connectionBadge">
         <span class="status-dot"></span>
-        <span id="connectionText">Non connecté</span>
+        <span id="connectionText">kDrive : Non connecté</span>
+      </div>
+      <div class="connection-badge disconnected" id="bwTopBadge">
+        <span class="status-dot"></span>
+        <span id="bwTopText">Bitwarden : Verrouillé</span>
       </div>
     </div>
     <div class="window-controls">
+      <button class="lock-top-btn hidden" id="btnLockAppTop" title="Verrouiller l'application">🔒 Verrouiller</button>
       <button class="win-btn" id="btnMinimize" title="Réduire">&#x2013;</button>
       <button class="win-btn" id="btnMaximize" title="Agrandir">&#x25A1;</button>
       <button class="win-btn win-close" id="btnClose" title="Fermer">&#x2715;</button>
     </div>
   </header>
+
+  <!-- ====================================================================== -->
+  <!-- ÉCRAN DE VERROUILLAGE DE L'APPLICATION (APP_LOCK_CODE, défaut : 0000)  -->
+  <!-- ====================================================================== -->
+  <div class="app-lock-overlay" id="appLockOverlay">
+    <div class="lock-card">
+      <img src="../../assets/logo.svg" alt="KVault" class="lock-logo" />
+      <h2>KVault Desktop est verrouillé</h2>
+      <p class="lock-sub">Entrez votre code d'accès ou mot de passe pour déverrouiller vos espaces.</p>
+
+      <div class="default-code-hint" id="defaultCodeHint">
+        💡 Code initial par défaut : <code>0000</code> <span>(modifiable dans ⚙️ Paramètres)</span>
+      </div>
+
+      <form id="appUnlockForm" class="lock-form">
+        <input
+          type="password"
+          id="appUnlockInput"
+          placeholder="Code ou mot de passe..."
+          autocomplete="off"
+          autofocus
+        />
+        <div class="pin-pad">
+          <button type="button" class="pin-key" data-digit="1">1</button>
+          <button type="button" class="pin-key" data-digit="2">2</button>
+          <button type="button" class="pin-key" data-digit="3">3</button>
+          <button type="button" class="pin-key" data-digit="4">4</button>
+          <button type="button" class="pin-key" data-digit="5">5</button>
+          <button type="button" class="pin-key" data-digit="6">6</button>
+          <button type="button" class="pin-key" data-digit="7">7</button>
+          <button type="button" class="pin-key" data-digit="8">8</button>
+          <button type="button" class="pin-key" data-digit="9">9</button>
+          <button type="button" class="pin-key pin-clear" id="btnPinClear" title="Tout effacer">C</button>
+          <button type="button" class="pin-key" data-digit="0">0</button>
+          <button type="button" class="pin-key pin-back" id="btnPinBack" title="Effacer">⌫</button>
+        </div>
+        <div class="lock-error hidden" id="appUnlockError">Code incorrect.</div>
+        <button type="submit" class="btn btn-primary btn-lg full-width">🔓 Déverrouiller KVault</button>
+      </form>
+    </div>
+  </div>
 
   <div class="app-shell">
     <!-- Barre latérale -->
@@ -50,11 +96,11 @@
       </div>
 
       <div class="nav-group">
-        <div class="nav-label">SÉCURITÉ &amp; MOTS DE PASSE</div>
+        <div class="nav-label">MOTS DE PASSE</div>
         <button class="nav-item" data-view="bitwarden">
           <span class="nav-icon">🔐</span>
           <span>Coffre Bitwarden</span>
-          <span class="soon-tag">v0.2</span>
+          <span class="live-tag" id="bwSidebarBadge">v0.2</span>
         </button>
       </div>
 
@@ -62,7 +108,7 @@
         <div class="nav-label">APPLICATION</div>
         <button class="nav-item" data-view="settings">
           <span class="nav-icon">⚙️</span>
-          <span>Connexion &amp; .env</span>
+          <span>Paramètres &amp; Sécurité</span>
         </button>
       </div>
 
@@ -82,7 +128,7 @@
 
     <!-- Zone principale -->
     <main class="main-content" id="dropZone">
-      <!-- Overlay Glisser-Déposer -->
+      <!-- Overlay Glisser-Déposer kDrive -->
       <div class="drop-overlay hidden" id="dropOverlay">
         <div class="drop-box">
           <div class="drop-icon">☁️⬆️</div>
@@ -95,7 +141,6 @@
       <!-- VUE 1 : EXPLORATEUR KDRIVE                                       -->
       <!-- ================================================================ -->
       <section class="view-panel" id="viewKdrive">
-        <!-- Barre d'outils supérieure -->
         <div class="toolbar">
           <div class="breadcrumb-bar">
             <button class="icon-btn" id="btnBack" title="Dossier parent" disabled>⬅</button>
@@ -114,56 +159,44 @@
               <button class="switch-btn" id="btnListView" title="Vue Liste">☰</button>
             </div>
 
-            <button class="btn btn-secondary" id="btnNewFolder" title="Créer un sous-dossier">
-              <span>+ Dossier</span>
-            </button>
-            <button class="btn btn-accent-outline" id="btnUploadPhotos" title="Sauvegarder des photos">
-              <span>📸 Photos</span>
-            </button>
-            <button class="btn btn-primary" id="btnUploadFiles">
-              <span>⬆️ Sauvegarder fichiers</span>
-            </button>
-            <button class="btn btn-secondary" id="btnUploadFolder" title="Sauvegarder un dossier entier">
-              <span>📁 Dossier</span>
-            </button>
+            <button class="btn btn-secondary" id="btnNewFolder" title="Créer un sous-dossier">+ Dossier</button>
+            <button class="btn btn-accent-outline" id="btnUploadPhotos" title="Sauvegarder des photos">📸 Photos</button>
+            <button class="btn btn-primary" id="btnUploadFiles">⬆️ Sauvegarder fichiers</button>
+            <button class="btn btn-secondary" id="btnUploadFolder" title="Sauvegarder un dossier entier">📁 Dossier</button>
           </div>
         </div>
 
-        <!-- État : Non configuré / Guide de démarrage rapide -->
         <div class="onboarding-card hidden" id="onboardingCard">
-          <div class="onboarding-badge">🚀 Premier lancement — Configuration rapide</div>
-          <h2>Connectez votre espace Infomaniak kDrive</h2>
+          <div class="onboarding-badge">🚀 Configuration rapide Infomaniak kDrive</div>
+          <h2>Connectez votre espace kDrive</h2>
           <p>
-            Vous pouvez renseigner vos identifiants directement dans le fichier <code>.env</code> à la racine du projet,
-            ou cliquer sur le bouton ci-dessous pour les saisir dans l'interface (le fichier <code>.env</code> sera mis à jour automatiquement).
+            Renseignez vos accès dans <code>.env</code> ou directement dans l'onglet <strong>⚙️ Paramètres &amp; Sécurité</strong>.
           </p>
           <div class="steps-grid">
             <div class="step-box">
               <div class="step-num">1</div>
               <h4>Récupérez votre <code>KDRIVE_ID</code></h4>
-              <p>Ouvrez kDrive sur votre navigateur : regardez le chiffre après <code>/drive/</code> dans l'URL (ex: <code>123456</code>).</p>
+              <p>Ouvrez kDrive Web : copiez les chiffres après <code>/drive/</code> dans l'URL (ex: <code>123456</code>).</p>
               <button class="link-btn" data-ext="https://ksuite.infomaniak.com/kdrive">Ouvrir kDrive Web ↗</button>
             </div>
             <div class="step-box">
               <div class="step-num">2</div>
               <h4>Créez un <code>KDRIVE_API_TOKEN</code></h4>
-              <p>Dans votre profil Infomaniak → Développeur → Tokens API, créez un token avec la permission <strong>drive</strong>.</p>
+              <p>Dans Infomaniak Manager → Tokens API, créez un token avec la permission <strong>drive</strong>.</p>
               <button class="link-btn" data-ext="https://manager.infomaniak.com/v3/ng/profile/user/token/list">Générer un Token API ↗</button>
             </div>
           </div>
           <div class="onboarding-cta">
             <button class="btn btn-primary btn-lg" id="btnGoSettings">Configurer ma connexion kDrive →</button>
-            <button class="btn btn-secondary btn-lg" id="btnRetryConnect">J'ai modifié le .env, tester la connexion</button>
+            <button class="btn btn-secondary btn-lg" id="btnRetryConnect">Tester la connexion</button>
           </div>
         </div>
 
-        <!-- État : Chargement -->
         <div class="state-box hidden" id="loadingState">
           <div class="spinner"></div>
           <p>Synchronisation avec Infomaniak kDrive...</p>
         </div>
 
-        <!-- État : Erreur -->
         <div class="error-banner hidden" id="errorState">
           <div>
             <strong>Impossible de charger kDrive</strong>
@@ -175,95 +208,235 @@
           </div>
         </div>
 
-        <!-- État : Dossier vide -->
         <div class="state-box hidden" id="emptyState">
           <div class="empty-illustration">📂</div>
           <h3>Aucun élément à afficher</h3>
           <p>Glissez-déposez vos photos ou fichiers ici pour les sauvegarder directement sur votre kDrive.</p>
         </div>
 
-        <!-- Grille / Liste des fichiers -->
         <div class="files-container grid-mode" id="filesContainer"></div>
       </section>
 
       <!-- ================================================================ -->
-      <!-- VUE 2 : MODULE BITWARDEN (APERÇU ROADMAP v0.2.0)                 -->
+      <!-- VUE 2 : COFFRE-FORT BITWARDEN / VAULTWARDEN (v0.2.0)             -->
       <!-- ================================================================ -->
       <section class="view-panel hidden" id="viewBitwarden">
-        <div class="module-hero">
-          <div class="soon-pill-large">🔐 Module prévu pour la version v0.2.0</div>
-          <h2>Gestionnaire de mots de passe Bitwarden</h2>
-          <p>
-            L'architecture de <strong>KVault Desktop</strong> est prête pour accueillir votre coffre-fort
-            <strong>Bitwarden</strong> (officiel <code>bitwarden.eu</code> / <code>bitwarden.com</code> ou auto-hébergé <strong>Vaultwarden</strong>).
-          </p>
+        <!-- État chargement Bitwarden -->
+        <div class="state-box hidden" id="bwLoadingBox">
+          <div class="spinner"></div>
+          <p id="bwLoadingText">Communication sécurisée avec Bitwarden...</p>
+        </div>
 
-          <div class="feature-preview-grid">
-            <div class="preview-card">
-              <div class="preview-icon">🔑</div>
-              <h4>Connexion API Key + Master Password</h4>
-              <p>Déverrouillage local chiffré de bout en bout via la CLI officielle Bitwarden sans jamais exposer vos secrets en clair.</p>
+        <!-- État A : Non authentifié (Première connexion Bitwarden) -->
+        <div class="bw-auth-card hidden" id="bwLoginCard">
+          <div class="bw-auth-header">
+            <div class="onboarding-badge">🔐 Coffre-fort Chiffré Bitwarden / Vaultwarden</div>
+            <h2>Connectez votre compte Bitwarden</h2>
+            <p>
+              Le déchiffrement s'effectue <strong>100 % localement</strong> via le moteur officiel Bitwarden.
+              Votre Mot de passe maître n'est jamais enregistré sur le disque.
+            </p>
+          </div>
+
+          <form id="bwLoginForm" class="bw-form">
+            <div class="form-row">
+              <label for="bwServerSelect">Région / Serveur Bitwarden</label>
+              <select id="bwServerSelect">
+                <option value="https://vault.bitwarden.eu">Bitwarden Europe (vault.bitwarden.eu)</option>
+                <option value="https://vault.bitwarden.com">Bitwarden Global / US (vault.bitwarden.com)</option>
+                <option value="custom">Serveur auto-hébergé (Vaultwarden / Custom URL)</option>
+              </select>
             </div>
-            <div class="preview-card">
-              <div class="preview-icon">📋</div>
-              <h4>Copie rapide &amp; Purge Presse-papiers</h4>
-              <p>Copiez un identifiant, mot de passe ou code TOTP 2FA en un clic avec effacement automatique après 20 secondes.</p>
+
+            <div class="form-row hidden" id="bwCustomServerRow">
+              <label for="bwCustomServerInput">URL de votre serveur Vaultwarden</label>
+              <input type="url" id="bwCustomServerInput" placeholder="https://vault.mondomaine.fr" />
             </div>
-            <div class="preview-card">
-              <div class="preview-icon">🛡️</div>
-              <h4>Sauvegarde chiffrée sur kDrive</h4>
-              <p>Export chiffré AES-256 de secours de votre coffre Bitwarden directement dans un dossier dédié de votre kDrive !</p>
+
+            <div class="auth-tabs">
+              <button type="button" class="auth-tab active" id="tabBwApiKey">🔑 Clé API + Mot de passe maître (Recommandé)</button>
+              <button type="button" class="auth-tab" id="tabBwEmail">📧 Email + Mot de passe maître</button>
+            </div>
+
+            <!-- Connexion via Clé API -->
+            <div id="bwApiKeyFields" class="bw-method-box">
+              <div class="form-row">
+                <label for="bwClientIdInput">Client ID (<code>BITWARDEN_CLIENT_ID</code>)</label>
+                <input type="text" id="bwClientIdInput" placeholder="user.xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autocomplete="off" />
+              </div>
+              <div class="form-row">
+                <label for="bwClientSecretInput">Client Secret (<code>BITWARDEN_CLIENT_SECRET</code>)</label>
+                <input type="password" id="bwClientSecretInput" placeholder="Votre Client Secret personnel Bitwarden" autocomplete="off" />
+                <small class="hint">
+                  Trouvez votre clé sur votre coffre Web Bitwarden : <strong>Paramètres → Sécurité → Clés → Voir la clé API</strong>
+                  (<button type="button" class="inline-link" data-ext="https://vault.bitwarden.eu/#/settings/security/security-keys">Ouvrir Bitwarden EU ↗</button>
+                  | <button type="button" class="inline-link" data-ext="https://vault.bitwarden.com/#/settings/security/security-keys">Bitwarden COM ↗</button>).
+                </small>
+              </div>
+              <label class="checkbox-row">
+                <input type="checkbox" id="bwSaveApiKeysCheck" checked />
+                <span>Mémoriser le Client ID &amp; Secret dans ma configuration locale (`.env`)</span>
+              </label>
+            </div>
+
+            <!-- Connexion via Email -->
+            <div id="bwEmailFields" class="bw-method-box hidden">
+              <div class="form-row">
+                <label for="bwEmailInput">Email du compte Bitwarden</label>
+                <input type="email" id="bwEmailInput" placeholder="vous@exemple.com" autocomplete="off" />
+              </div>
+              <div class="form-row">
+                <label for="bwTwoFactorInput">Code 2FA Authenticator (optionnel, si activé)</label>
+                <input type="text" id="bwTwoFactorInput" placeholder="Ex : 123456" autocomplete="off" />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <label for="bwLoginMasterPass">Mot de passe maître Bitwarden (déchiffrement local)</label>
+              <input type="password" id="bwLoginMasterPass" placeholder="Entrez votre Mot de passe maître..." autocomplete="off" required />
+            </div>
+
+            <div class="lock-error hidden" id="bwLoginError"></div>
+
+            <div class="form-actions-inline">
+              <button type="submit" class="btn btn-primary btn-lg">🔓 Connecter &amp; Déverrouiller mon coffre</button>
+              <button type="button" class="btn btn-secondary btn-lg" id="btnOpenGenFromLogin">🎲 Générateur de mot de passe</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- État B : Compte connecté mais coffre verrouillé -->
+        <div class="bw-auth-card compact hidden" id="bwUnlockCard">
+          <div class="onboarding-badge">🔒 Coffre-fort Bitwarden verrouillé</div>
+          <h2>Déverrouiller votre session</h2>
+          <p id="bwLockedAccountInfo">Compte connecté — saisissez votre Mot de passe maître pour déchiffrer vos identifiants.</p>
+
+          <form id="bwUnlockForm" class="bw-form">
+            <div class="form-row">
+              <label for="bwUnlockMasterPass">Mot de passe maître</label>
+              <input type="password" id="bwUnlockMasterPass" placeholder="Mot de passe maître Bitwarden..." autocomplete="off" required />
+            </div>
+            <div class="lock-error hidden" id="bwUnlockError"></div>
+            <div class="form-actions-inline">
+              <button type="submit" class="btn btn-primary btn-lg">🔓 Déverrouiller</button>
+              <button type="button" class="btn btn-secondary" id="btnBwLogoutFromLocked">Changer de compte</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- État C : Coffre déverrouillé (Split View : Liste + Détails) -->
+        <div class="bw-vault-workspace hidden" id="bwVaultWorkspace">
+          <div class="toolbar">
+            <div class="bw-filter-pills">
+              <button class="pill-btn active" data-bwfilter="all">Tous</button>
+              <button class="pill-btn" data-bwfilter="favorites">⭐ Favoris</button>
+              <button class="pill-btn" data-bwfilter="login">🔑 Identifiants</button>
+              <button class="pill-btn" data-bwfilter="note">📝 Notes</button>
+              <button class="pill-btn" data-bwfilter="card">💳 Cartes</button>
+            </div>
+
+            <div class="toolbar-actions">
+              <div class="search-box">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="bwSearchInput" placeholder="Rechercher un site, login..." />
+              </div>
+              <button class="btn btn-accent-outline" id="btnOpenGenerator">🎲 Générateur</button>
+              <button class="btn btn-primary" id="btnOpenNewLogin">+ Identifiant</button>
+              <button class="btn btn-secondary" id="btnBwSync" title="Synchroniser avec le cloud Bitwarden">🔄 Sync</button>
+              <button class="btn btn-secondary" id="btnBwLock" title="Verrouiller le coffre Bitwarden">🔒 Verrouiller</button>
+              <button class="btn btn-secondary" id="btnBwLogout" title="Déconnecter le compte Bitwarden">Déconnexion</button>
+            </div>
+          </div>
+
+          <div class="bw-split-layout">
+            <div class="bw-items-list" id="bwItemsList"></div>
+            <div class="bw-item-detail" id="bwItemDetail">
+              <div class="bw-detail-empty">
+                <div class="empty-illustration">🛡️</div>
+                <h3>Sélectionnez un élément</h3>
+                <p>Cliquez sur un identifiant à gauche pour afficher ses détails, copier le mot de passe ou ouvrir le site web.</p>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
       <!-- ================================================================ -->
-      <!-- VUE 3 : PARAMÈTRES & CONNEXION (.ENV)                            -->
+      <!-- VUE 3 : PARAMÈTRES & SÉCURITÉ (.ENV + CODE D'ACCÈS)              -->
       <!-- ================================================================ -->
       <section class="view-panel hidden" id="viewSettings">
         <div class="settings-wrapper">
           <div class="settings-header">
-            <h2>Paramètres de connexion kDrive</h2>
+            <h2>Paramètres &amp; Sécurité de KVault Desktop</h2>
             <p>
-              Les informations saisies ici sont sauvegardées localement et synchronisées avec votre fichier
-              <code id="envPathDisplay">.env</code> (ignoré par Git grâce au <code>.gitignore</code>).
+              Vos réglages sont enregistrés dans votre profil local (pour l'exécutable <code>.exe</code>)
+              et synchronisés avec <code id="envPathDisplay">.env</code> s'il est présent.
             </p>
           </div>
 
+          <!-- BLOC 1 : Code de verrouillage de l'application -->
+          <form id="lockCodeForm" class="settings-card">
+            <div class="card-section-title">
+              <span>🛡️ Code / Mot de passe de verrouillage de l'application (<code>APP_LOCK_CODE</code>)</span>
+              <span class="code-status-pill" id="lockCodeStatusPill">Par défaut (0000)</span>
+            </div>
+            <p class="hint">
+              Ce code protège l'ouverture de KVault Desktop sur Windows. Par défaut réglé sur <code>0000</code>,
+              vous pouvez définir le code PIN ou mot de passe de votre choix.
+            </p>
+            <div class="form-grid-3">
+              <div class="form-row">
+                <label for="inputCurrentLockCode">Code actuel</label>
+                <input type="password" id="inputCurrentLockCode" placeholder="Ex : 0000" autocomplete="off" required />
+              </div>
+              <div class="form-row">
+                <label for="inputNewLockCode">Nouveau code / mot de passe</label>
+                <input type="password" id="inputNewLockCode" placeholder="Min. 4 caractères" autocomplete="off" required />
+              </div>
+              <div class="form-row">
+                <label for="inputConfirmLockCode">Confirmer le nouveau code</label>
+                <input type="password" id="inputConfirmLockCode" placeholder="Répétez le code" autocomplete="off" required />
+              </div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-accent-outline">🔐 Mettre à jour mon code d'accès</button>
+            </div>
+          </form>
+
+          <!-- BLOC 2 : Connexion kDrive & Préférences Bitwarden -->
           <form id="settingsForm" class="settings-card">
+            <div class="card-section-title">
+              <span>☁️ Connexion Infomaniak kDrive</span>
+            </div>
+
             <div class="form-row">
               <label for="inputMode">Méthode de connexion Infomaniak</label>
               <select id="inputMode">
                 <option value="api">API REST Officielle Infomaniak (Recommandé — Gratuit &amp; Payant)</option>
                 <option value="webdav">Protocole WebDAV (Uniquement offres kDrive Solo / Pro payantes)</option>
               </select>
-              <small class="hint">L'API officielle fonctionne sur 100% des comptes Infomaniak (y compris my kSuite gratuit) et affiche le quota disque.</small>
             </div>
 
             <div class="form-row">
               <label for="inputDriveId">Identifiant numérique kDrive (<code>KDRIVE_ID</code>)</label>
               <input type="text" id="inputDriveId" placeholder="Ex : 123456" autocomplete="off" />
               <small class="hint">
-                Visible dans l'adresse web de votre kDrive :
-                <code>https://ksuite.infomaniak.com/.../drive/<strong>123456</strong>/files</code>
-                — <button type="button" class="inline-link" data-ext="https://ksuite.infomaniak.com/kdrive">Ouvrir mon kDrive ↗</button>
+                Chiffres après <code>/drive/</code> dans l'URL web kDrive —
+                <button type="button" class="inline-link" data-ext="https://ksuite.infomaniak.com/kdrive">Ouvrir mon kDrive ↗</button>
               </small>
             </div>
 
-            <!-- Champs Mode API -->
             <div id="apiFieldsGroup">
               <div class="form-row">
                 <label for="inputApiToken">Token API Infomaniak (<code>KDRIVE_API_TOKEN</code>)</label>
                 <input type="password" id="inputApiToken" placeholder="Collez votre Bearer Token Infomaniak ici..." autocomplete="off" />
                 <small class="hint">
-                  Créez un token avec la permission <strong>drive</strong> sur
-                  <button type="button" class="inline-link" data-ext="https://manager.infomaniak.com/v3/ng/profile/user/token/list">Infomaniak Manager → Tokens API ↗</button>
+                  Scope requis : <strong>drive</strong> —
+                  <button type="button" class="inline-link" data-ext="https://manager.infomaniak.com/v3/ng/profile/user/token/list">Générer un Token API ↗</button>
                 </small>
               </div>
             </div>
 
-            <!-- Champs Mode WebDAV -->
             <div id="webdavFieldsGroup" class="hidden">
               <div class="form-row">
                 <label for="inputEmail">Email du compte Infomaniak (<code>KDRIVE_EMAIL</code>)</label>
@@ -271,17 +444,40 @@
               </div>
               <div class="form-row">
                 <label for="inputAppPassword">Mot de passe d'application (<code>KDRIVE_APP_PASSWORD</code>)</label>
-                <input type="password" id="inputAppPassword" placeholder="Mot de passe d'application généré dans Sécurité" autocomplete="off" />
-                <small class="hint">
-                  Si la double authentification (2FA) est activée, créez un mot de passe d'application dans
-                  <button type="button" class="inline-link" data-ext="https://manager.infomaniak.com/v3/ng/profile/user/security/application-passwords">Sécurité → Mots de passe d'application ↗</button>
-                </small>
+                <input type="password" id="inputAppPassword" placeholder="Mot de passe d'application" autocomplete="off" />
+              </div>
+            </div>
+
+            <hr class="settings-divider" />
+
+            <div class="card-section-title">
+              <span>🔐 Paramètres pré-remplis Bitwarden (optionnel)</span>
+            </div>
+
+            <div class="form-row">
+              <label for="inputBwServer">URL Serveur Bitwarden (<code>BITWARDEN_SERVER_URL</code>)</label>
+              <input type="text" id="inputBwServer" placeholder="https://vault.bitwarden.eu" autocomplete="off" />
+            </div>
+
+            <div class="form-row">
+              <label for="inputBwEmail">Email Bitwarden (<code>BITWARDEN_EMAIL</code>)</label>
+              <input type="email" id="inputBwEmail" placeholder="vous@exemple.com" autocomplete="off" />
+            </div>
+
+            <div class="form-grid-2">
+              <div class="form-row">
+                <label for="inputBwClientId">Bitwarden Client ID (<code>BITWARDEN_CLIENT_ID</code>)</label>
+                <input type="text" id="inputBwClientId" placeholder="user.xxxx..." autocomplete="off" />
+              </div>
+              <div class="form-row">
+                <label for="inputBwClientSecret">Bitwarden Client Secret (<code>BITWARDEN_CLIENT_SECRET</code>)</label>
+                <input type="password" id="inputBwClientSecret" placeholder="Client Secret..." autocomplete="off" />
               </div>
             </div>
 
             <div class="form-actions">
               <button type="submit" class="btn btn-primary btn-lg" id="btnSaveConfig">
-                💾 Enregistrer &amp; Tester la connexion
+                💾 Enregistrer la configuration
               </button>
             </div>
           </form>
@@ -305,7 +501,7 @@
   <!-- Notification Toast -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <!-- Modale : Créer un nouveau dossier -->
+  <!-- Modale : Créer un nouveau dossier kDrive -->
   <div class="modal-backdrop hidden" id="folderModal">
     <div class="modal-card">
       <h3>📁 Nouveau dossier sur kDrive</h3>
@@ -318,7 +514,7 @@
     </div>
   </div>
 
-  <!-- Modale : Confirmation de suppression -->
+  <!-- Modale : Confirmation de suppression kDrive -->
   <div class="modal-backdrop hidden" id="deleteModal">
     <div class="modal-card">
       <h3>🗑️ Déplacer vers la corbeille ?</h3>
@@ -343,6 +539,69 @@
       <div class="preview-body">
         <div class="spinner" id="previewSpinner"></div>
         <img id="previewImageEl" alt="Aperçu" class="hidden" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Modale : Ajouter un identifiant Bitwarden -->
+  <div class="modal-backdrop hidden" id="newBwItemModal">
+    <div class="modal-card modal-wide">
+      <h3>🔐 Nouvel identifiant Bitwarden</h3>
+      <form id="newBwItemForm" class="bw-form">
+        <div class="form-row">
+          <label for="newBwName">Nom du service / site *</label>
+          <input type="text" id="newBwName" placeholder="Ex : GitHub, Netflix, Infomaniak..." required />
+        </div>
+        <div class="form-row">
+          <label for="newBwUsername">Identifiant / Email</label>
+          <input type="text" id="newBwUsername" placeholder="vous@exemple.com" />
+        </div>
+        <div class="form-row">
+          <label for="newBwPassword">Mot de passe</label>
+          <div class="input-with-btn">
+            <input type="text" id="newBwPassword" placeholder="Mot de passe..." />
+            <button type="button" class="btn btn-accent-outline" id="btnFillGeneratedPass">🎲 Générer</button>
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="newBwUri">URL du site web (optionnel)</label>
+          <input type="text" id="newBwUri" placeholder="https://github.com" />
+        </div>
+        <div class="form-row">
+          <label for="newBwNotes">Notes (optionnel)</label>
+          <textarea id="newBwNotes" rows="2" placeholder="Notes sécurisées..."></textarea>
+        </div>
+        <label class="checkbox-row">
+          <input type="checkbox" id="newBwFavorite" />
+          <span>⭐ Ajouter aux favoris</span>
+        </label>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="btnCancelNewBwItem">Annuler</button>
+          <button type="submit" class="btn btn-primary">Enregistrer dans Bitwarden</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modale : Générateur de mots de passe forts -->
+  <div class="modal-backdrop hidden" id="generatorModal">
+    <div class="modal-card modal-wide">
+      <h3>🎲 Générateur de mot de passe</h3>
+      <div class="generated-display" id="generatedPasswordBox">—</div>
+      <div class="form-row">
+        <label for="genLengthRange">Longueur : <strong id="genLengthValue">20</strong> caractères</label>
+        <input type="range" id="genLengthRange" min="8" max="64" value="20" />
+      </div>
+      <div class="gen-checks">
+        <label class="checkbox-row"><input type="checkbox" id="genUpper" checked /> <span>A–Z (Majuscules)</span></label>
+        <label class="checkbox-row"><input type="checkbox" id="genLower" checked /> <span>a–z (Minuscules)</span></label>
+        <label class="checkbox-row"><input type="checkbox" id="genNum" checked /> <span>0–9 (Chiffres)</span></label>
+        <label class="checkbox-row"><input type="checkbox" id="genSym" checked /> <span>!@#$%^&amp;* (Symboles)</span></label>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="btnCloseGenerator">Fermer</button>
+        <button type="button" class="btn btn-accent-outline" id="btnRegeneratePass">↻ Régénérer</button>
+        <button type="button" class="btn btn-primary" id="btnCopyGeneratedPass">📋 Copier</button>
       </div>
     </div>
   </div>
