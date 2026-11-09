@@ -1868,3 +1868,341 @@ code {
   display: flex;
   gap: 8px;
 }
+
+
+/* =========================================================================
+   v0.4.0 : EXPLORATEUR POWER-USER (MULTI-SÉLECTION, TRI, FAVORIS, CORBEILLE)
+   & QUICK-VAULT BITWARDEN GLOBAL (Ctrl+Maj+K)
+   ========================================================================= */
+kbd {
+  font-family: Consolas, 'Cascadia Code', monospace;
+  font-size: 10.5px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #e2e8f0;
+}
+
+.quick-vault-top-btn {
+  height: 28px;
+  padding: 0 10px;
+  margin-right: 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(16, 185, 129, 0.38);
+  background: rgba(16, 185, 129, 0.1);
+  color: #6ee7b7;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s;
+}
+
+.quick-vault-top-btn:hover {
+  background: rgba(16, 185, 129, 0.22);
+  color: #fff;
+}
+
+.btn-sm {
+  height: 36px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.search-combo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sort-select {
+  height: 36px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-main);
+  font-size: 12.5px;
+  font-weight: 500;
+  outline: none;
+  cursor: pointer;
+}
+
+.sort-select:focus {
+  border-color: var(--primary);
+}
+
+.special-mode-banner {
+  background: linear-gradient(90deg, rgba(0, 152, 255, 0.16), rgba(0, 229, 255, 0.06));
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.special-mode-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.special-mode-info strong {
+  font-size: 14px;
+  color: #fff;
+}
+
+.special-mode-info span {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.special-mode-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Case à cocher Multi-Sélection & Badge Favori sur les cartes kDrive */
+.file-select-check {
+  position: absolute;
+  top: 7px;
+  left: 7px;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: rgba(7, 11, 20, 0.82);
+  border: 1.5px solid rgba(148, 163, 184, 0.45);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 4;
+  opacity: 0;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.file-card:hover .file-select-check,
+.file-card.selected .file-select-check {
+  opacity: 1;
+}
+
+.file-card.selected {
+  border-color: var(--cyan);
+  background: rgba(0, 152, 255, 0.16);
+  box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.35);
+}
+
+.file-card.selected .file-select-check {
+  background: var(--primary);
+  border-color: var(--cyan);
+}
+
+.fav-star-badge {
+  position: absolute;
+  bottom: 7px;
+  right: 7px;
+  padding: 2px 6px;
+  border-radius: 99px;
+  background: rgba(245, 158, 11, 0.9);
+  color: #fff;
+  font-size: 11px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+
+.files-container.list-mode .file-select-check {
+  position: static;
+  opacity: 1;
+  flex-shrink: 0;
+}
+
+.files-container.list-mode .fav-star-badge {
+  display: none;
+}
+
+/* Barre d'actions groupées Multi-Sélection */
+.batch-action-bar {
+  position: sticky;
+  bottom: 6px;
+  z-index: 30;
+  background: rgba(13, 21, 38, 0.96);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--cyan);
+  border-radius: var(--radius-md);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.65);
+  margin-top: auto;
+}
+
+.batch-left {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.batch-count-badge {
+  min-width: 26px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 99px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.batch-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Palette Spotlight Quick-Vault Bitwarden (Ctrl+Maj+K) */
+.quick-vault-dialog {
+  width: min(92vw, 680px);
+  max-height: 78vh;
+  background: #0d1527;
+  border: 1px solid var(--cyan);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.8);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.quick-vault-search-bar {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(7, 11, 20, 0.7);
+}
+
+.quick-vault-icon {
+  font-size: 20px;
+}
+
+.quick-vault-search-bar input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #fff;
+  font-size: 15px;
+}
+
+.quick-vault-shortcuts-hint {
+  padding: 7px 16px;
+  background: rgba(0, 152, 255, 0.08);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.quick-vault-locked {
+  padding: 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.quick-vault-locked input {
+  height: 38px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: #fff;
+}
+
+.quick-vault-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 410px;
+}
+
+.qv-row {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: var(--bg-card);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.qv-row:hover,
+.qv-row.active {
+  background: rgba(0, 152, 255, 0.18);
+  border-color: var(--border-accent);
+}
+
+.qv-row-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.qv-row-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* Carte de vérification des mises à jour GitHub */
+.update-card {
+  border-color: rgba(56, 189, 248, 0.3);
+}
+
+.update-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.update-status-text {
+  font-size: 13px;
+  color: var(--text-muted);
+  flex: 1;
+  min-width: 240px;
+}
+
+.update-actions {
+  display: flex;
+  gap: 8px;
+}

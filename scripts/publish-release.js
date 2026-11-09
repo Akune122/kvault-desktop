@@ -22,11 +22,11 @@ function getGitHubTokenFromGitCredential() {
 }
 
 function buildReleaseTitle(tagName) {
-  return `KVault Desktop ${tagName} — Galerie Multimédia Streaming & Intégration Windows Pro`;
+  return `KVault Desktop ${tagName} — Explorateur kDrive Power-User & Quick-Vault Windows`;
 }
 
 function buildReleaseBody(version) {
-  return `## 🚀 KVault Desktop \`v${version}\` — Galerie Multimédia Streaming & Intégration Windows Pro
+  return `## 🚀 KVault Desktop \`v${version}\` — Explorateur kDrive Power-User & Expérience Windows Productivité
 
 Bienvenue dans la version **\`v${version}\`** de **KVault Desktop**, l'application Windows tout-en-un qui réunit votre cloud **Infomaniak kDrive** et votre coffre-fort de mots de passe **Bitwarden / Vaultwarden**.
 
@@ -34,18 +34,25 @@ Bienvenue dans la version **\`v${version}\`** de **KVault Desktop**, l'applicati
 
 ### ✨ Nouveautés majeures de la \`v${version}\`
 
-#### 🖼️ Pack Multimédia & Galerie Photo kDrive
-- **Miniatures photos réelles** : affichage instantané des aperçus dans la grille et la liste avec **cache disque local** (\`thumb-cache\`) pour une navigation ultra-fluide.
-- **Visionneuse universelle en streaming** *(sans téléchargement préalable sur le PC)* :
-  - **Vidéos & Musiques** (\`.mp4\`, \`.webm\`, \`.mov\`, \`.mkv\`, \`.mp3\`, \`.flac\`, \`.wav\`, \`.m4a\`) diffusées en direct avec avance rapide HTTP \`Range\`.
-  - **Lecteur PDF natif intégré** et lecteur **Texte / Code / JSON / Markdown / CSV**.
-  - **Photos HD** avec zoom interactif (\`-\` / \`100%\` / \`+\` + molette souris) et navigation Galerie (\`❮\` / \`❯\` ou flèches clavier \`←\` / \`→\`).
+#### 🗂️ Pack Explorateur kDrive "Power-User"
+- **Multi-sélection & Actions groupées (Batch)** :
+  - Cases à cocher sur les cartes fichiers, sélection rapide avec \`Ctrl + Clic\` et bouton **\`☑️ Tout\`** dans la barre d'outils.
+  - Barre flottante d'actions groupées : **Télécharger la sélection** *(choisissez un dossier Windows une seule fois)*, **Déplacer vers...** et **Supprimer en lot**.
+- **Tri personnalisé & Recherche globale kDrive** :
+  - Tri instantané par **Nom (\`A → Z\` / \`Z → A\`)**, **Date (\`Plus récents\` / \`Plus anciens\`)** ou **Taille (\`Plus volumineux\` / \`Plus légers\`)** (les dossiers restent toujours groupés en tête).
+  - Bouton **\`🌐 Tout kDrive\`** (\`Entrée\`) pour rechercher un fichier ou dossier dans l'intégralité de votre kDrive via l'API Infomaniak.
+- **⭐ Favoris kDrive & 🗑️ Corbeille kDrive intégrée** :
+  - Épinglez vos dossiers et fichiers fréquents dans **\`⭐ Favoris kDrive\`** via le clic-droit ou le bouton étoile.
+  - Gérez votre **\`🗑️ Corbeille kDrive\`** directement dans l'application : **Restaurer** un ou plusieurs éléments, **Supprimer définitivement** ou **Vider la corbeille**.
 
-#### 🪟 Pack Intégration Windows Pro & Gestion Avancée kDrive
-- **System Tray Windows** : icône KVault près de l'horloge Windows avec menu rapide (*Ouvrir*, *Verrouiller maintenant*, *Quitter complètement*) et réduction en arrière-plan à la fermeture (\`MINIMIZE_TO_TRAY\`).
-- **Verrouillage automatique par inactivité (\`AUTO_LOCK_MINUTES\`)** : verrouille automatiquement KVault Desktop et votre coffre Bitwarden après \`2\`, \`5\`, \`10\`, \`15\` ou \`30\` min d'inactivité Windows *(suspendu automatiquement pendant la lecture d'un film ou d'un fichier audio)*.
-- **Liens de partage publics kDrive en 1 clic** : générez, copiez dans le presse-papiers ou désactivez un lien public Infomaniak directement depuis une carte ou le clic-droit.
-- **Menu Clic-Droit, Renommer & Déplacer vers...** : organisez vos fichiers et dossiers kDrive avec un explorateur de destination intégré.
+#### ⚡ Pack Expérience Windows "Productivité"
+- **Palette globale Quick-Vault (\`Ctrl+Maj+K\` partout dans Windows)** :
+  - Appuyez sur **\`Ctrl+Maj+K\`** depuis n'importe quel navigateur, jeu ou logiciel Windows pour faire surgir la recherche rapide **Bitwarden Quick-Vault** au premier plan.
+  - Navigation 100 % clavier (\`↑\` / \`↓\`, \`Entrée\` pour copier le mot de passe avec purge auto 20s, \`Ctrl+U\` pour l'identifiant, \`Ctrl+T\` pour le code 2FA TOTP, déverrouillage express intégré si le coffre est verrouillé).
+- **Démarrage automatique avec Windows (\`LAUNCH_AT_STARTUP\`)** :
+  - Option activable en 1 clic dans **⚙️ Paramètres & Sécurité** pour lancer KVault Desktop discrètement dans le System Tray à l'ouverture de session Windows.
+- **Vérificateur de mise à jour GitHub intégré** :
+  - Vérifiez en 1 clic depuis **⚙️ Paramètres & Sécurité** si une nouvelle version GitHub Release est disponible et téléchargez directement le nouveau \`.exe\`.
 
 ---
 
@@ -53,7 +60,7 @@ Bienvenue dans la version **\`v${version}\`** de **KVault Desktop**, l'applicati
 
 1. Téléchargez le fichier **\`KVault-Desktop-${version}-Portable.exe\`** ci-dessous dans la section **Assets**.
 2. Lancez l'application et tapez votre code d'accès (**\`0000\`** par défaut lors d'une première installation).
-3. Profitez de vos espaces **Infomaniak kDrive** et **Bitwarden** directement depuis votre bureau ou la barre des tâches Windows !`;
+3. Utilisez **\`Ctrl+Maj+K\`** à tout moment sous Windows pour ouvrir votre palette **Quick-Vault Bitwarden** !`;
 }
 
 async function main() {

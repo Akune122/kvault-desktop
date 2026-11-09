@@ -1,17 +1,18 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('kvault', {
-  // Contrôles de fenêtre, System Tray & Utilitaires
+  // Contrôles de fenêtre, System Tray, Mises à jour & Utilitaires
   minimizeWindow: () => ipcRenderer.invoke('window:minimize'),
   toggleMaximizeWindow: () => ipcRenderer.invoke('window:toggleMaximize'),
   closeWindow: () => ipcRenderer.invoke('window:close'),
   quitAppNow: () => ipcRenderer.invoke('app:quitNow'),
+  checkForUpdates: () => ipcRenderer.invoke('app:checkForUpdates'),
   setMediaPlaying: (playing) => ipcRenderer.invoke('media:setPlaying', playing),
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
   copyToClipboard: (text, autoClearMs = 0) =>
     ipcRenderer.invoke('clipboard:copy', { text, autoClearMs }),
 
-  // Verrouillage de l'application (APP_LOCK_CODE — défaut 0000 + Auto-lock)
+  // Verrouillage de l'application & Raccourci Global Quick-Vault
   getLockInfo: () => ipcRenderer.invoke('auth:getLockInfo'),
   unlockApp: (code) => ipcRenderer.invoke('auth:unlockApp', code),
   lockApp: () => ipcRenderer.invoke('auth:lockApp'),
@@ -22,14 +23,29 @@ contextBridge.exposeInMainWorld('kvault', {
     ipcRenderer.on('app:locked', listener);
     return () => ipcRenderer.removeListener('app:locked', listener);
   },
+  onOpenQuickVault: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on('app:openQuickVault', listener);
+    return () => ipcRenderer.removeListener('app:openQuickVault', listener);
+  },
 
   // Configuration (.env + stockage local)
   getConfig: () => ipcRenderer.invoke('config:get'),
   saveConfig: (values) => ipcRenderer.invoke('config:save', values),
 
-  // Infomaniak kDrive (v0.1 -> v0.3)
+  // Infomaniak kDrive (v0.1 -> v0.4)
   connectKDrive: () => ipcRenderer.invoke('kdrive:connect'),
   listFiles: (folderId) => ipcRenderer.invoke('kdrive:list', folderId),
+  searchFiles: (query) => ipcRenderer.invoke('kdrive:search', { query }),
+  getFavorites: () => ipcRenderer.invoke('kdrive:getFavorites'),
+  toggleFavorite: (item) => ipcRenderer.invoke('kdrive:toggleFavorite', { item }),
+  listTrash: () => ipcRenderer.invoke('kdrive:listTrash'),
+  restoreTrash: (fileIds) => ipcRenderer.invoke('kdrive:restoreTrash', { fileIds }),
+  deleteTrashPermanently: (fileIds) => ipcRenderer.invoke('kdrive:deleteTrashPermanently', { fileIds }),
+  emptyTrash: () => ipcRenderer.invoke('kdrive:emptyTrash'),
+  batchDownload: (items) => ipcRenderer.invoke('kdrive:batchDownload', { items }),
+  batchMove: (fileIds, destinationFolderId) => ipcRenderer.invoke('kdrive:batchMove', { fileIds, destinationFolderId }),
+  batchDelete: (fileIds) => ipcRenderer.invoke('kdrive:batchDelete', { fileIds }),
   createFolder: (parentId, folderName) => ipcRenderer.invoke('kdrive:createFolder', { parentId, folderName }),
   pickAndUploadFiles: (parentId, onlyImages = false) =>
     ipcRenderer.invoke('kdrive:pickAndUploadFiles', { parentId, onlyImages }),
@@ -60,7 +76,7 @@ contextBridge.exposeInMainWorld('kvault', {
     return () => ipcRenderer.removeListener('kdrive:uploadProgress', listener);
   },
 
-  // Bitwarden / Vaultwarden (v0.2.0)
+  // Bitwarden / Vaultwarden (v0.2.0+)
   bwStatus: () => ipcRenderer.invoke('bw:status'),
   bwLoginAndUnlock: (payload) => ipcRenderer.invoke('bw:loginAndUnlock', payload),
   bwUnlock: (masterPassword) => ipcRenderer.invoke('bw:unlock', { masterPassword }),

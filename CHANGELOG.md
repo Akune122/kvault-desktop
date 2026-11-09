@@ -3,9 +3,21 @@
 Toutes les modifications notables de **KVault Desktop** sont documentées dans ce fichier.
 Ce projet respecte le format [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et le [Semantic Versioning](https://semver.org/lang/fr/).
 
-## [Non publié] — Prévu pour `v0.4.0`
+## [Non publié] — Prévu pour `v0.5.0`
 - Sauvegarde automatique programmée de dossiers locaux Windows vers Infomaniak kDrive.
 - Export chiffré de secours du coffre-fort Bitwarden directement dans kDrive.
+
+## [0.4.0] - 2026-11-09
+### Ajouté
+- **🗂️ Pack Explorateur kDrive "Power-User"** :
+  - **Multi-sélection & Actions groupées (Batch)** : cases à cocher sur les cartes, `Ctrl + Clic`, bouton `☑️ Tout` et barre flottante d'actions groupées (*Télécharger la sélection* vers un dossier Windows unique, *Déplacer vers...*, *Supprimer en lot* et *Restaurer la sélection*).
+  - **Tri personnalisé** : tri instantané par Nom (`A → Z` / `Z → A`), Date (`Plus récents` / `Plus anciens`) ou Taille (`Plus volumineux` / `Plus légers`) avec maintien des dossiers en tête.
+  - **Recherche globale sur tout kDrive** : bouton `🌐 Tout kDrive` permettant d'interroger l'intégralité du cloud Infomaniak (`/3/drive/{driveId}/files/search`).
+  - **⭐ Favoris kDrive & 🗑️ Corbeille kDrive** : accès direct dans la barre latérale aux favoris épinglés (`kdrive-favorites.json`) et à la corbeille kDrive (*Restaurer*, *Supprimer définitivement*, *Vider la corbeille*).
+- **⚡ Pack Expérience Windows "Productivité"** :
+  - **Palette globale Quick-Vault (`Ctrl+Maj+K`, `GLOBAL_SHORTCUT`)** : raccourci système Windows ouvrant une recherche Spotlight Bitwarden au premier plan par-dessus n'importe quelle application, avec navigation clavier complète (`↑`/`↓`, `Entrée` mot de passe, `Ctrl+U` identifiant, `Ctrl+T` TOTP 2FA) et déverrouillage express intégré.
+  - **Démarrage automatique avec Windows (`LAUNCH_AT_STARTUP`)** : lancement discret en arrière-plan (System Tray) à l'ouverture de session Windows.
+  - **Vérificateur de mises à jour GitHub Releases** : vérification en 1 clic dans **⚙️ Paramètres & Sécurité** via l'API GitHub et téléchargement direct du dernier `.exe`.
 
 ## [0.3.0] - 2026-11-06
 ### Ajouté

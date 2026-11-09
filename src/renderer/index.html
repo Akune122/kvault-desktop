@@ -16,7 +16,7 @@
     <div class="titlebar-drag">
       <img src="../../assets/logo.svg" alt="KVault" class="titlebar-logo" />
       <span class="titlebar-title">KVault <span class="accent-text">Desktop</span></span>
-      <span class="version-pill" id="versionPill">v0.3.0</span>
+      <span class="version-pill" id="versionPill">v0.4.0</span>
       <div class="connection-badge disconnected" id="connectionBadge">
         <span class="status-dot"></span>
         <span id="connectionText">kDrive : Non connecté</span>
@@ -27,6 +27,9 @@
       </div>
     </div>
     <div class="window-controls">
+      <button class="quick-vault-top-btn hidden" id="btnQuickVaultTop" title="Ouvrir la recherche rapide Bitwarden (Ctrl+Maj+K)">
+        ⚡ Quick-Vault <kbd>Ctrl+Maj+K</kbd>
+      </button>
       <button class="lock-top-btn hidden" id="btnLockAppTop" title="Verrouiller l'application">🔒 Verrouiller</button>
       <button class="win-btn" id="btnMinimize" title="Réduire">&#x2013;</button>
       <button class="win-btn" id="btnMaximize" title="Agrandir">&#x25A1;</button>
@@ -84,6 +87,10 @@
           <span class="nav-icon">☁️</span>
           <span>Tous mes fichiers</span>
         </button>
+        <button class="nav-item" data-view="kdrive" data-filter="favorites">
+          <span class="nav-icon">⭐</span>
+          <span>Mes Favoris</span>
+        </button>
         <button class="nav-item" data-view="kdrive" data-filter="images">
           <span class="nav-icon">🖼️</span>
           <span>Photos &amp; Galerie</span>
@@ -95,6 +102,10 @@
         <button class="nav-item" data-view="kdrive" data-filter="media">
           <span class="nav-icon">🎬</span>
           <span>Vidéos &amp; Audio</span>
+        </button>
+        <button class="nav-item" data-view="kdrive" data-filter="trash">
+          <span class="nav-icon">🗑️</span>
+          <span>Corbeille kDrive</span>
         </button>
       </div>
 
@@ -141,7 +152,7 @@
       </div>
 
       <!-- ================================================================ -->
-      <!-- VUE 1 : EXPLORATEUR KDRIVE & GALERIE MULTIMÉDIA                  -->
+      <!-- VUE 1 : EXPLORATEUR KDRIVE POWER-USER (v0.4.0)                   -->
       <!-- ================================================================ -->
       <section class="view-panel" id="viewKdrive">
         <div class="toolbar">
@@ -152,10 +163,28 @@
           </div>
 
           <div class="toolbar-actions">
-            <div class="search-box">
-              <span class="search-icon">🔍</span>
-              <input type="text" id="searchInput" placeholder="Filtrer ce dossier..." />
+            <div class="search-combo">
+              <div class="search-box">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="searchInput" placeholder="Filtrer ou Entrée = Tout kDrive..." />
+              </div>
+              <button class="btn btn-secondary btn-sm" id="btnGlobalSearch" title="Rechercher dans tout votre kDrive">
+                🌐 Tout kDrive
+              </button>
             </div>
+
+            <select id="sortSelect" class="sort-select" title="Trier les fichiers">
+              <option value="name-asc">Tri : Nom (A → Z)</option>
+              <option value="name-desc">Tri : Nom (Z → A)</option>
+              <option value="date-desc">Tri : Plus récent</option>
+              <option value="date-asc">Tri : Plus ancien</option>
+              <option value="size-desc">Tri : Plus lourd</option>
+              <option value="size-asc">Tri : Plus léger</option>
+            </select>
+
+            <button class="btn btn-secondary btn-sm" id="btnSelectAll" title="Tout sélectionner / Tout désélectionner">
+              ☑️ Tout
+            </button>
 
             <div class="view-switch">
               <button class="switch-btn active" id="btnGridView" title="Vue Grille & Miniatures">⊞</button>
@@ -164,8 +193,20 @@
 
             <button class="btn btn-secondary" id="btnNewFolder" title="Créer un sous-dossier">+ Dossier</button>
             <button class="btn btn-accent-outline" id="btnUploadPhotos" title="Sauvegarder des photos">📸 Photos</button>
-            <button class="btn btn-primary" id="btnUploadFiles">⬆️ Sauvegarder fichiers</button>
+            <button class="btn btn-primary" id="btnUploadFiles">⬆️ Sauvegarder</button>
             <button class="btn btn-secondary" id="btnUploadFolder" title="Sauvegarder un dossier entier">📁 Dossier</button>
+          </div>
+        </div>
+
+        <!-- Bannière de mode spécial : Recherche Globale / Favoris / Corbeille (v0.4.0) -->
+        <div class="special-mode-banner hidden" id="specialModeBanner">
+          <div class="special-mode-info">
+            <strong id="specialModeTitle">Mode spécial</strong>
+            <span id="specialModeSub"></span>
+          </div>
+          <div class="special-mode-actions">
+            <button type="button" class="btn btn-danger-outline hidden" id="btnEmptyTrash">🔥 Vider toute la corbeille</button>
+            <button type="button" class="btn btn-secondary" id="btnExitSpecialMode">↩ Revenir au dossier</button>
           </div>
         </div>
 
@@ -197,7 +238,7 @@
 
         <div class="state-box hidden" id="loadingState">
           <div class="spinner"></div>
-          <p>Synchronisation avec Infomaniak kDrive...</p>
+          <p id="loadingStateText">Synchronisation avec Infomaniak kDrive...</p>
         </div>
 
         <div class="error-banner hidden" id="errorState">
@@ -212,12 +253,30 @@
         </div>
 
         <div class="state-box hidden" id="emptyState">
-          <div class="empty-illustration">📂</div>
-          <h3>Aucun élément à afficher</h3>
-          <p>Glissez-déposez vos photos ou fichiers ici pour les sauvegarder directement sur votre kDrive.</p>
+          <div class="empty-illustration" id="emptyStateIcon">📂</div>
+          <h3 id="emptyStateTitle">Aucun élément à afficher</h3>
+          <p id="emptyStateSub">Glissez-déposez vos photos ou fichiers ici pour les sauvegarder directement sur votre kDrive.</p>
         </div>
 
         <div class="files-container grid-mode" id="filesContainer"></div>
+
+        <!-- Barre d'actions groupées Multi-Sélection (v0.4.0 — Pack 3) -->
+        <div class="batch-action-bar hidden" id="batchActionBar">
+          <div class="batch-left">
+            <span class="batch-count-badge" id="batchCountBadge">0</span>
+            <span id="batchCountLabel">élément(s) sélectionné(s)</span>
+          </div>
+          <div class="batch-buttons" id="batchNormalBtns">
+            <button type="button" class="btn btn-primary" id="btnBatchDownload">⬇️ Télécharger le lot</button>
+            <button type="button" class="btn btn-secondary" id="btnBatchMove">📂 Déplacer vers...</button>
+            <button type="button" class="btn btn-danger-outline" id="btnBatchDelete">🗑️ Corbeille</button>
+          </div>
+          <div class="batch-buttons hidden" id="batchTrashBtns">
+            <button type="button" class="btn btn-primary" id="btnBatchRestore">♻️ Restaurer la sélection</button>
+            <button type="button" class="btn btn-danger" id="btnBatchDeletePermanent">🔥 Supprimer définitivement</button>
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm" id="btnBatchClear">✕ Désélectionner</button>
+        </div>
       </section>
 
       <!-- ================================================================ -->
@@ -365,7 +424,7 @@
       </section>
 
       <!-- ================================================================ -->
-      <!-- VUE 3 : PARAMÈTRES, SÉCURITÉ & INTÉGRATION WINDOWS PRO           -->
+      <!-- VUE 3 : PARAMÈTRES, SÉCURITÉ & PRODUCTIVITÉ WINDOWS              -->
       <!-- ================================================================ -->
       <section class="view-panel hidden" id="viewSettings">
         <div class="settings-wrapper">
@@ -375,6 +434,23 @@
               Vos réglages sont enregistrés dans votre profil local (pour l'exécutable <code>.exe</code>)
               et synchronisés avec <code id="envPathDisplay">.env</code> s'il est présent.
             </p>
+          </div>
+
+          <!-- BLOC 0 : Mises à jour GitHub & Version (v0.4.0 — Pack 4) -->
+          <div class="settings-card update-card">
+            <div class="card-section-title">
+              <span>🚀 Version &amp; Mises à jour GitHub</span>
+              <span class="code-status-pill custom" id="settingsVersionBadge">v0.4.0</span>
+            </div>
+            <div class="update-row">
+              <div class="update-status-text" id="updateStatusText">
+                Vérifiez en 1 clic si une nouvelle version <code>.exe</code> est disponible sur le dépôt GitHub officiel.
+              </div>
+              <div class="update-actions">
+                <button type="button" class="btn btn-secondary" id="btnCheckUpdates">🔄 Vérifier les mises à jour</button>
+                <button type="button" class="btn btn-primary hidden" id="btnDownloadUpdate">⬇️ Télécharger la mise à jour (.exe)</button>
+              </div>
+            </div>
           </div>
 
           <!-- BLOC 1 : Code de verrouillage de l'application -->
@@ -406,31 +482,47 @@
             </div>
           </form>
 
-          <!-- BLOC 2 : Intégration Windows Pro + Connexion kDrive & Bitwarden -->
+          <!-- BLOC 2 : Productivité Windows Pro + Connexion kDrive & Bitwarden -->
           <form id="settingsForm" class="settings-card">
             <div class="card-section-title">
-              <span>🖥️ Intégration Windows Pro &amp; Verrouillage Automatique</span>
-              <span class="live-tag">v0.3</span>
+              <span>⚡ Productivité Windows, Quick-Vault &amp; Verrouillage Automatique</span>
+              <span class="live-tag">v0.4</span>
             </div>
 
-            <div class="form-row">
-              <label for="inputAutoLockMinutes">Verrouillage automatique par inactivité (<code>AUTO_LOCK_MINUTES</code>)</label>
-              <select id="inputAutoLockMinutes">
-                <option value="0">Désactivé (ne jamais verrouiller automatiquement)</option>
-                <option value="2">Après 2 minutes d'inactivité</option>
-                <option value="5">Après 5 minutes d'inactivité</option>
-                <option value="10">Après 10 minutes d'inactivité (Recommandé)</option>
-                <option value="15">Après 15 minutes d'inactivité</option>
-                <option value="30">Après 30 minutes d'inactivité</option>
-              </select>
-              <small class="hint">
-                Verrouille automatiquement KVault Desktop et votre coffre Bitwarden lorsque Windows est inactif (suspendu automatiquement pendant la lecture d'une vidéo ou d'un fichier audio).
-              </small>
+            <div class="form-grid-2">
+              <div class="form-row">
+                <label for="inputGlobalShortcut">Raccourci global Quick-Vault (<code>GLOBAL_SHORTCUT</code>)</label>
+                <select id="inputGlobalShortcut">
+                  <option value="CommandOrControl+Shift+K">Ctrl + Maj + K (Recommandé)</option>
+                  <option value="CommandOrControl+Alt+K">Ctrl + Alt + K</option>
+                  <option value="CommandOrControl+Shift+Space">Ctrl + Maj + Espace</option>
+                  <option value="disabled">Désactivé</option>
+                </select>
+                <small class="hint">Ouvre la recherche rapide Bitwarden par-dessus n'importe quelle application Windows.</small>
+              </div>
+
+              <div class="form-row">
+                <label for="inputAutoLockMinutes">Verrouillage auto par inactivité (<code>AUTO_LOCK_MINUTES</code>)</label>
+                <select id="inputAutoLockMinutes">
+                  <option value="0">Désactivé (jamais)</option>
+                  <option value="2">Après 2 minutes</option>
+                  <option value="5">Après 5 minutes</option>
+                  <option value="10">Après 10 minutes (Recommandé)</option>
+                  <option value="15">Après 15 minutes</option>
+                  <option value="30">Après 30 minutes</option>
+                </select>
+                <small class="hint">Suspendu automatiquement pendant la lecture d'une vidéo ou d'un fichier audio.</small>
+              </div>
             </div>
 
             <label class="checkbox-row">
               <input type="checkbox" id="inputMinimizeToTray" checked />
               <span>Garder KVault actif dans la zone de notification Windows (System Tray près de l'horloge) en fermant la fenêtre (<code>MINIMIZE_TO_TRAY</code>)</span>
+            </label>
+
+            <label class="checkbox-row">
+              <input type="checkbox" id="inputLaunchAtStartup" />
+              <span>Lancer automatiquement KVault Desktop au démarrage de Windows en arrière-plan (<code>LAUNCH_AT_STARTUP</code>)</span>
             </label>
 
             <div class="form-actions-inline">
@@ -521,15 +613,52 @@
     </main>
   </div>
 
-  <!-- Menu contextuel Clic-Droit kDrive (v0.3.0) -->
+  <!-- Menu contextuel Clic-Droit kDrive (v0.3.0 / v0.4.0) -->
   <div class="context-menu hidden" id="fileContextMenu">
     <button type="button" class="ctx-item" id="ctxOpen">👁 Ouvrir / Aperçu</button>
+    <button type="button" class="ctx-item" id="ctxFavorite">⭐ Ajouter aux favoris</button>
     <button type="button" class="ctx-item" id="ctxShare">🔗 Lien de partage public</button>
     <button type="button" class="ctx-item" id="ctxRename">✏️ Renommer</button>
     <button type="button" class="ctx-item" id="ctxMove">📂 Déplacer vers...</button>
     <button type="button" class="ctx-item" id="ctxDownload">⬇️ Télécharger sur ce PC</button>
     <div class="ctx-sep"></div>
     <button type="button" class="ctx-item danger" id="ctxDelete">🗑️ Mettre à la corbeille</button>
+  </div>
+
+  <!-- ====================================================================== -->
+  <!-- PALETTE SPOTLIGHT QUICK-VAULT BITWARDEN (v0.4.0 — Pack 4 : Ctrl+Maj+K) -->
+  <!-- ====================================================================== -->
+  <div class="modal-backdrop hidden" id="quickVaultModal">
+    <div class="quick-vault-dialog">
+      <div class="quick-vault-search-bar">
+        <span class="quick-vault-icon">⚡</span>
+        <input
+          type="text"
+          id="quickVaultInput"
+          placeholder="Rechercher un identifiant Bitwarden (ex: GitHub, Infomaniak, Netflix...)"
+          autocomplete="off"
+        />
+        <button type="button" class="btn btn-secondary btn-sm" id="btnCloseQuickVault">Échap ✕</button>
+      </div>
+
+      <div class="quick-vault-shortcuts-hint">
+        <span><kbd>↑</kbd> <kbd>↓</kbd> Naviguer</span>
+        <span><kbd>Entrée</kbd> Copier Mot de passe</span>
+        <span><kbd>Ctrl+U</kbd> Copier Identifiant</span>
+        <span><kbd>Ctrl+T</kbd> Copier Code 2FA</span>
+      </div>
+
+      <!-- Si le coffre Bitwarden est verrouillé, déverrouillage express intégré -->
+      <div class="quick-vault-locked hidden" id="quickVaultLockedBox">
+        <p id="quickVaultLockedMsg">🔒 Votre coffre Bitwarden est verrouillé.</p>
+        <form id="quickVaultUnlockForm" class="input-with-btn">
+          <input type="password" id="quickVaultMasterPass" placeholder="Mot de passe maître Bitwarden..." autocomplete="off" />
+          <button type="submit" class="btn btn-primary">🔓 Déverrouiller</button>
+        </form>
+      </div>
+
+      <div class="quick-vault-list" id="quickVaultList"></div>
+    </div>
   </div>
 
   <!-- Barre flottante de progression d'Upload -->
@@ -560,7 +689,7 @@
     </div>
   </div>
 
-  <!-- Modale : Renommer un fichier ou dossier kDrive (v0.3.0) -->
+  <!-- Modale : Renommer un fichier ou dossier kDrive -->
   <div class="modal-backdrop hidden" id="renameModal">
     <div class="modal-card">
       <h3>✏️ Renommer l'élément</h3>
@@ -573,7 +702,7 @@
     </div>
   </div>
 
-  <!-- Modale : Déplacer vers un dossier kDrive (v0.3.0) -->
+  <!-- Modale : Déplacer vers un dossier kDrive (unitaire ou lot) -->
   <div class="modal-backdrop hidden" id="moveModal">
     <div class="modal-card modal-wide">
       <h3>📂 Déplacer vers...</h3>
@@ -590,7 +719,7 @@
     </div>
   </div>
 
-  <!-- Modale : Lien de partage public Infomaniak kDrive (v0.3.0) -->
+  <!-- Modale : Lien de partage public Infomaniak kDrive -->
   <div class="modal-backdrop hidden" id="shareModal">
     <div class="modal-card modal-wide">
       <h3>🔗 Lien de partage public kDrive</h3>
@@ -609,10 +738,10 @@
     </div>
   </div>
 
-  <!-- Modale : Confirmation de suppression kDrive -->
+  <!-- Modale : Confirmation de suppression kDrive (unitaire, lot ou vider corbeille) -->
   <div class="modal-backdrop hidden" id="deleteModal">
     <div class="modal-card">
-      <h3>🗑️ Déplacer vers la corbeille ?</h3>
+      <h3 id="deleteModalTitle">🗑️ Déplacer vers la corbeille ?</h3>
       <p id="deleteModalText">Voulez-vous vraiment supprimer cet élément de votre kDrive ?</p>
       <div class="modal-actions">
         <button class="btn btn-secondary" id="btnCancelDelete">Annuler</button>
@@ -623,7 +752,6 @@
 
   <!-- ====================================================================== -->
   <!-- VISIONNEUSE UNIVERSELLE MULTIMÉDIA & GALERIE (v0.3.0 — Pack 1)         -->
-  <!-- Photos (Zoom + Flèches) • Vidéo Streaming • Audio • PDF • Texte/Code  -->
   <!-- ====================================================================== -->
   <div class="modal-backdrop hidden" id="previewModal">
     <div class="preview-dialog">
@@ -634,7 +762,6 @@
         </div>
 
         <div class="preview-actions">
-          <!-- Contrôles de zoom (Images) -->
           <div class="zoom-controls hidden" id="previewZoomBar">
             <button type="button" class="zoom-btn" id="btnZoomOut" title="Zoom arrière (-)">−</button>
             <button type="button" class="zoom-btn zoom-label" id="btnZoomReset" title="Réinitialiser (100%)">100%</button>

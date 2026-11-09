@@ -367,6 +367,29 @@ class KDriveWebDavClient {
     }
     return { deleted: true };
   }
+
+  async searchFiles(query) {
+    const q = String(query || '').trim().toLowerCase();
+    if (!q) return [];
+    const rootItems = await this.listFiles('/');
+    return rootItems.filter((it) => it.name.toLowerCase().includes(q));
+  }
+
+  async listTrash() {
+    throw new Error('La gestion de la corbeille kDrive nécessite le mode "API REST Officielle" (configurable dans Paramètres).');
+  }
+
+  async restoreTrashItem() {
+    throw new Error('Mode API requis pour restaurer depuis la corbeille.');
+  }
+
+  async deleteTrashItemPermanently() {
+    throw new Error('Mode API requis pour gérer la corbeille.');
+  }
+
+  async emptyTrash() {
+    throw new Error('Mode API requis pour vider la corbeille.');
+  }
 }
 
 module.exports = { KDriveWebDavClient };

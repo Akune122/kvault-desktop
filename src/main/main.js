@@ -9,7 +9,8 @@ const {
   Tray,
   Menu,
   nativeImage,
-  powerMonitor
+  powerMonitor,
+  globalShortcut
 } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -19,7 +20,7 @@ const { createKDriveClient, getRootFolderId, isConfigured } = require('../servic
 const { BitwardenService } = require('../services/bitwarden-service');
 
 // ============================================================================
-// Protocole sécurisé de streaming local kDrive (v0.3.0 : Vidéo, Audio, PDF, Miniatures)
+// Protocole sécurisé de streaming local kDrive (v0.3.0+ : Vidéo, Audio, PDF, Miniatures)
 // Doit impérativement être déclaré avant app.whenReady()
 // ============================================================================
 protocol.registerSchemesAsPrivileged([
@@ -44,6 +45,7 @@ let isMediaPlaying = false;
 let autoLockTimer = null;
 let clipboardClearTimer = null;
 let bitwardenService = null;
+let registeredShortcut = null;
 
 // Verrou d'instance unique : si l'app est réduite dans le System Tray, relancer le .exe rouvre la fenêtre existante
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
@@ -62,9 +64,9 @@ function getBitwarden() {
   return bitwardenService;
 }
 
-function showAndFocusMainWindow() {
+function showAndFocusMainWindow(bringToFrontPulse = false) {
   if (!mainWindow || mainWindow.isDestroyed()) {
-    createMainWindow();
+    createMainWindow(false);
     return;
   }
   if (!mainWindow.isVisible()) {
@@ -73,7 +75,58 @@ function showAndFocusMainWindow() {
   if (mainWindow.isMinimized()) {
     mainWindow.restore();
   }
-  mainWindow.focus();
+  if (bringToFrontPulse) {
+    try {
+      mainWindow.setAlwaysOnTop(true);
+      mainWindow.focus();
+      setTimeout(() => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.setAlwaysOnTop(false);
+        }
+      }, 280);
+    } catch (_) {
+      mainWindow.focus();
+    }
+  } else {
+    mainWindow.focus();
+  }
+}
+
+// ============================================================================
+// v0.4.0 (Pack 3) : Gestionnaire local persistant des Favoris kDrive
+// ============================================================================
+function getFavoritesFilePath() {
+  return path.join(app.getPath('userData'), 'kdrive-favorites.json');
+}
+
+function readFavoritesMap() {
+  const favPath = getFavoritesFilePath();
+  if (!fs.existsSync(favPath)) return {};
+  try {
+    return JSON.parse(fs.readFileSync(favPath, 'utf8')) || {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function writeFavoritesMap(map) {
+  const favPath = getFavoritesFilePath();
+  fs.mkdirSync(path.dirname(favPath), { recursive: true });
+  fs.writeFileSync(favPath, JSON.stringify(map, null, 2), 'utf8');
+}
+
+function getDriveFavoritesList(driveKey) {
+  const all = readFavoritesMap();
+  return Array.isArray(all[driveKey]) ? all[driveKey] : [];
+}
+
+function decorateItemsWithFavorites(items, driveKey) {
+  const favList = getDriveFavoritesList(driveKey);
+  const favIds = new Set(favList.map((f) => String(f.id)));
+  return (items || []).map((it) => ({
+    ...it,
+    isFavorite: Boolean(it.isFavorite || favIds.has(String(it.id)))
+  }));
 }
 
 // ============================================================================
@@ -237,13 +290,12 @@ function registerKDriveMediaProtocol() {
 }
 
 // ============================================================================
-// Verrouillage global + Verrouillage automatique par inactivité (Pack 4)
+// Verrouillage global + Verrouillage automatique par inactivité
 // ============================================================================
 function performFullLock(reason = 'manual') {
   isAppUnlocked = false;
   isMediaPlaying = false;
 
-  // Verrouille également la session Bitwarden en arrière-plan par sécurité
   if (bitwardenService) {
     bitwardenService.lockVault().catch(() => {});
   }
@@ -279,9 +331,58 @@ function startAutoLockWatcher() {
         performFullLock('inactivity');
       }
     } catch (_) {
-      // Ignore si powerMonitor indisponible momentanément
+      // Ignore
     }
   }, 10000);
+}
+
+// ============================================================================
+// v0.4.0 (Pack 4) : Raccourci Clavier Global Quick-Vault & Démarrage Windows
+// ============================================================================
+function triggerQuickVaultFromSystem() {
+  showAndFocusMainWindow(true);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('app:openQuickVault');
+  }
+}
+
+function registerGlobalQuickVaultShortcut() {
+  try {
+    globalShortcut.unregisterAll();
+    registeredShortcut = null;
+
+    const { config } = loadConfig(app);
+    const rawShortcut = String(config.GLOBAL_SHORTCUT ?? 'CommandOrControl+Shift+K').trim();
+    if (!rawShortcut || rawShortcut.toLowerCase() === 'disabled' || rawShortcut.toLowerCase() === 'none') {
+      return { ok: true, activeShortcut: null };
+    }
+
+    const ok = globalShortcut.register(rawShortcut, () => {
+      triggerQuickVaultFromSystem();
+    });
+
+    if (ok) {
+      registeredShortcut = rawShortcut;
+    }
+    return { ok, activeShortcut: registeredShortcut };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+function applyWindowsStartupSetting() {
+  if (process.platform !== 'win32') return;
+  try {
+    const { config } = loadConfig(app);
+    const openAtLogin = String(config.LAUNCH_AT_STARTUP || 'false').toLowerCase() === 'true';
+    app.setLoginItemSettings({
+      openAtLogin,
+      path: process.execPath,
+      args: ['--hidden']
+    });
+  } catch (_) {
+    // Ignore en environnement restreint
+  }
 }
 
 // ============================================================================
@@ -294,6 +395,10 @@ function updateTrayMenu() {
     {
       label: '📂 Ouvrir KVault Desktop',
       click: () => showAndFocusMainWindow()
+    },
+    {
+      label: '⚡ Quick-Vault Bitwarden (Ctrl+Maj+K)',
+      click: () => triggerQuickVaultFromSystem()
     },
     {
       label: isAppUnlocked ? '🔒 Verrouiller maintenant' : '🔒 Application verrouillée',
@@ -333,12 +438,13 @@ function setupSystemTray() {
   }
 }
 
-function createMainWindow() {
+function createMainWindow(startHidden = false) {
   mainWindow = new BrowserWindow({
-    width: 1320,
-    height: 860,
+    width: 1340,
+    height: 870,
     minWidth: 980,
     minHeight: 660,
+    show: !startHidden,
     frame: false,
     backgroundColor: '#070B14',
     icon: path.join(__dirname, '..', '..', 'assets', 'icon.png'),
@@ -369,7 +475,7 @@ function createMainWindow() {
           tray.displayBalloon({
             iconType: 'info',
             title: 'KVault Desktop reste actif en arrière-plan',
-            content: 'Cliquez sur l\'icône KVault près de l\'horloge Windows pour rouvrir ou quitter.'
+            content: 'Astuce : appuyez sur Ctrl+Maj+K à tout moment pour ouvrir le Quick-Vault Bitwarden !'
           });
         } catch (_) {
           // Ignore
@@ -395,8 +501,20 @@ function collectFilesFromFolder(localFolderPath) {
   return results;
 }
 
+function compareSemver(vA, vB) {
+  const cleanA = String(vA || '0.0.0').replace(/^v/i, '').split('.').map((n) => parseInt(n, 10) || 0);
+  const cleanB = String(vB || '0.0.0').replace(/^v/i, '').split('.').map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < 3; i++) {
+    const a = cleanA[i] || 0;
+    const b = cleanB[i] || 0;
+    if (a > b) return 1;
+    if (a < b) return -1;
+  }
+  return 0;
+}
+
 // ============================================================================
-// IPC : Contrôles de fenêtre, System Tray, Presse-papiers & Utilitaires
+// IPC : Contrôles de fenêtre, System Tray, Mises à jour GitHub & Utilitaires
 // ============================================================================
 ipcMain.handle('window:minimize', () => {
   if (mainWindow) mainWindow.minimize();
@@ -424,6 +542,49 @@ ipcMain.handle('app:quitNow', () => {
 ipcMain.handle('media:setPlaying', (_event, playing) => {
   isMediaPlaying = Boolean(playing);
   return { ok: true };
+});
+
+ipcMain.handle('app:checkForUpdates', async () => {
+  const currentVersion = app.getVersion();
+  try {
+    const res = await fetch('https://api.github.com/repos/Akune122/kvault-desktop/releases/latest', {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        'User-Agent': 'KVault-Desktop-App'
+      }
+    });
+
+    if (!res.ok) {
+      throw new Error(`GitHub API HTTP ${res.status}`);
+    }
+
+    const release = await res.json();
+    const latestVersion = String(release.tag_name || currentVersion).replace(/^v/i, '');
+    const hasUpdate = compareSemver(latestVersion, currentVersion) > 0;
+
+    let exeAssetUrl = release.html_url;
+    if (Array.isArray(release.assets)) {
+      const exeAsset = release.assets.find((a) => String(a.name || '').endsWith('.exe'));
+      if (exeAsset?.browser_download_url) {
+        exeAssetUrl = exeAsset.browser_download_url;
+      }
+    }
+
+    return {
+      ok: true,
+      currentVersion,
+      latestVersion,
+      hasUpdate,
+      releaseUrl: release.html_url || 'https://github.com/Akune122/kvault-desktop/releases',
+      downloadUrl: exeAssetUrl || 'https://github.com/Akune122/kvault-desktop/releases'
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      currentVersion,
+      error: err.message
+    };
+  }
 });
 
 ipcMain.handle('shell:openExternal', async (_event, url) => {
@@ -512,7 +673,7 @@ ipcMain.handle('auth:changeLockCode', (_event, { currentCode, newCode }) => {
 ipcMain.handle('config:get', () => {
   const { config, envPath } = loadConfig(app);
   const safeConfig = { ...config };
-  delete safeConfig.APP_LOCK_CODE; // Ne jamais exposer le code de verrouillage en clair au front
+  delete safeConfig.APP_LOCK_CODE;
 
   return {
     config: safeConfig,
@@ -520,27 +681,32 @@ ipcMain.handle('config:get', () => {
     envPath,
     configured: isConfigured(config),
     rootId: getRootFolderId(config),
-    appVersion: app.getVersion()
+    appVersion: app.getVersion(),
+    activeShortcut: registeredShortcut
   };
 });
 
 ipcMain.handle('config:save', (_event, newValues) => {
   const cleanValues = { ...(newValues || {}) };
-  delete cleanValues.APP_LOCK_CODE; // Modifiable uniquement via auth:changeLockCode
+  delete cleanValues.APP_LOCK_CODE;
 
   const updated = saveConfig(app, cleanValues);
+  registerGlobalQuickVaultShortcut();
+  applyWindowsStartupSetting();
+
   const safeUpdated = { ...updated };
   delete safeUpdated.APP_LOCK_CODE;
 
   return {
     config: safeUpdated,
     configured: isConfigured(updated),
-    rootId: getRootFolderId(updated)
+    rootId: getRootFolderId(updated),
+    activeShortcut: registeredShortcut
   };
 });
 
 // ============================================================================
-// IPC : Opérations Infomaniak kDrive (v0.1 -> v0.3)
+// IPC : Opérations Infomaniak kDrive (v0.1 -> v0.4)
 // ============================================================================
 ipcMain.handle('kdrive:connect', async () => {
   try {
@@ -562,8 +728,194 @@ ipcMain.handle('kdrive:list', async (_event, folderId) => {
     const { config } = loadConfig(app);
     const client = createKDriveClient(config);
     const targetFolder = folderId || getRootFolderId(config);
-    const items = await client.listFiles(targetFolder);
+    const rawItems = await client.listFiles(targetFolder);
+    const items = decorateItemsWithFavorites(rawItems, config.KDRIVE_ID || 'default');
     return { ok: true, items, folderId: targetFolder };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('kdrive:search', async (_event, { query }) => {
+  try {
+    const { config } = loadConfig(app);
+    const client = createKDriveClient(config);
+    const rawItems = await client.searchFiles(query);
+    const items = decorateItemsWithFavorites(rawItems, config.KDRIVE_ID || 'default');
+    return { ok: true, items };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('kdrive:getFavorites', () => {
+  try {
+    const { config } = loadConfig(app);
+    const driveKey = config.KDRIVE_ID || 'default';
+    const items = getDriveFavoritesList(driveKey).map((it) => ({ ...it, isFavorite: true }));
+    return { ok: true, items };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('kdrive:toggleFavorite', (_event, { item }) => {
+  try {
+    if (!item || !item.id) throw new Error('Élément invalide.');
+    const { config } = loadConfig(app);
+    const driveKey = config.KDRIVE_ID || 'default';
+    const map = readFavoritesMap();
+    const list = Array.isArray(map[driveKey]) ? map[driveKey] : [];
+    const existingIdx = list.findIndex((f) => String(f.id) === String(item.id));
+
+    let isFavorite = false;
+    if (existingIdx >= 0) {
+      list.splice(existingIdx, 1);
+      isFavorite = false;
+    } else {
+      list.unshift({
+        id: String(item.id),
+        parentId: item.parentId || '1',
+        name: item.name,
+        type: item.type,
+        size: item.size || 0,
+        mimeType: item.mimeType || 'application/octet-stream',
+        updatedAt: item.updatedAt || Date.now(),
+        hasThumbnail: Boolean(item.hasThumbnail),
+        hasSharelink: Boolean(item.hasSharelink),
+        isFavorite: true
+      });
+      isFavorite = true;
+    }
+
+    map[driveKey] = list;
+    writeFavoritesMap(map);
+    return { ok: true, isFavorite, items: list };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('kdrive:listTrash', async () => {
+  try {
+    const { config } = loadConfig(app);
+    const client = createKDriveClient(config);
+    const items = await client.listTrash();
+    return { ok: true, items };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('kdrive:restoreTrash', async (_event, { fileIds }) => {
+  try {
+    const { config } = loadConfig(app);
+    const client = createKDriveClient(config);
+    const ids = Array.isArray(fileIds) ? fileIds : [fileIds];
+    let restoredCount = 0;
+    for (const id of ids) {
+      await client.restoreTrashItem(id);
+      restoredCount++;
+    }
+    return { ok: true, restoredCount };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('kdrive:deleteTrashPermanently', async (_event, { fileIds }) => {
+  try {
+    const { config } = loadConfig(app);
+    const client = createKDriveClient(config);
+    const ids = Array.isArray(fileIds) ? fileIds : [fileIds];
+    let deletedCount = 0;
+    for (const id of ids) {
+      await client.deleteTrashItemPermanently(id);
+      deletedCount++;
+    }
+    return { ok: true, deletedCount };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('kdrive:emptyTrash', async () => {
+  try {
+    const { config } = loadConfig(app);
+    const client = createKDriveClient(config);
+    await client.emptyTrash();
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('kdrive:batchDownload', async (_event, { items }) => {
+  try {
+    const filesToDownload = (Array.isArray(items) ? items : []).filter((it) => it && it.type === 'file');
+    if (!filesToDownload.length) {
+      return { ok: false, error: 'Sélectionnez au moins un fichier téléchargeable (les dossiers ne se téléchargent pas directement).' };
+    }
+
+    const selection = await dialog.showOpenDialog(mainWindow, {
+      title: `Choisir le dossier Windows où enregistrer les ${filesToDownload.length} fichier(s)`,
+      properties: ['openDirectory', 'createDirectory']
+    });
+
+    if (selection.canceled || !selection.filePaths.length) {
+      return { ok: true, canceled: true, downloadedCount: 0 };
+    }
+
+    const targetDir = selection.filePaths[0];
+    const { config } = loadConfig(app);
+    const client = createKDriveClient(config);
+    let downloadedCount = 0;
+
+    for (const fileItem of filesToDownload) {
+      const safeName = path.basename(fileItem.name || `file_${fileItem.id}`);
+      const destPath = path.join(targetDir, safeName);
+      await client.downloadFile(fileItem.id, destPath);
+      downloadedCount++;
+    }
+
+    return { ok: true, downloadedCount, targetDir };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('kdrive:batchMove', async (_event, { fileIds, destinationFolderId }) => {
+  try {
+    const ids = Array.isArray(fileIds) ? fileIds : [fileIds];
+    const { config } = loadConfig(app);
+    const client = createKDriveClient(config);
+    const targetFolder = destinationFolderId || getRootFolderId(config);
+    let movedCount = 0;
+
+    for (const id of ids) {
+      if (String(id) !== String(targetFolder)) {
+        await client.moveItem(id, targetFolder);
+        movedCount++;
+      }
+    }
+    return { ok: true, movedCount };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('kdrive:batchDelete', async (_event, { fileIds }) => {
+  try {
+    const ids = Array.isArray(fileIds) ? fileIds : [fileIds];
+    const { config } = loadConfig(app);
+    const client = createKDriveClient(config);
+    let deletedCount = 0;
+
+    for (const id of ids) {
+      await client.deleteItem(id);
+      deletedCount++;
+    }
+    return { ok: true, deletedCount };
   } catch (err) {
     return { ok: false, error: err.message };
   }
@@ -808,7 +1160,7 @@ ipcMain.handle('kdrive:delete', async (_event, { fileId }) => {
 });
 
 // ============================================================================
-// IPC : Coffre-fort Bitwarden / Vaultwarden (v0.2.0)
+// IPC : Coffre-fort Bitwarden / Vaultwarden (v0.2.0+)
 // ============================================================================
 ipcMain.handle('bw:status', async () => {
   try {
@@ -932,14 +1284,20 @@ app.on('before-quit', () => {
   isQuitting = true;
 });
 
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
+});
+
 app.whenReady().then(() => {
   registerKDriveMediaProtocol();
   setupSystemTray();
-  createMainWindow();
+  createMainWindow(process.argv.includes('--hidden'));
   startAutoLockWatcher();
+  registerGlobalQuickVaultShortcut();
+  applyWindowsStartupSetting();
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
+    if (BrowserWindow.getAllWindows().length === 0) createMainWindow(false);
   });
 });
 

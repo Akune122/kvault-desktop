@@ -146,6 +146,7 @@ class KDriveApiClient {
     const timestampSec = item.last_modified_at || item.updated_at || item.added_at || item.created_at || 0;
     return {
       id: String(item.id),
+      parentId: item.parent_id ? String(item.parent_id) : '1',
       name: item.name || 'Sans nom',
       type: isDir ? 'dir' : 'file',
       size: Number(item.size || 0),
@@ -153,6 +154,7 @@ class KDriveApiClient {
       updatedAt: timestampSec ? timestampSec * 1000 : Date.now(),
       hasThumbnail: Boolean(item.has_thumbnail),
       hasSharelink: Boolean(item.has_sharelink || item.sharelink),
+      isFavorite: Boolean(item.is_favorite),
       path: item.path || ''
     };
   }
@@ -548,6 +550,123 @@ class KDriveApiClient {
       });
     }
     return { deleted: true };
+  }
+
+  // ==========================================================================
+  // v0.4.0 (Pack 3) : Recherche Globale kDrive & Gestion de la Corbeille
+  // ==========================================================================
+  async searchFiles(query) {
+    this.validateCredentials();
+    const cleanQuery = String(query || '').trim();
+    if (!cleanQuery) return [];
+
+    const endpoints = [
+      `/3/drive/${this.driveId}/files/search?query=${encodeURIComponent(cleanQuery)}&limit=100&with=sharelink`,
+      `/2/drive/${this.driveId}/files/search?query=${encodeURIComponent(cleanQuery)}&per_page=100`,
+      `/2/drive/${this.driveId}/files/search?name=${encodeURIComponent(cleanQuery)}&per_page=100`
+    ];
+
+    let rawItems = [];
+    let lastErr = null;
+
+    for (const ep of endpoints) {
+      try {
+        const res = await this.requestJson(ep);
+        if (Array.isArray(res?.data)) {
+          rawItems = res.data;
+          break;
+        }
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+
+    if (!rawItems.length && lastErr) {
+      // Fallback si l'endpoint search global n'a rien renvoyé : recherche récursive légère à la racine
+      try {
+        const rootItems = await this.listFiles('1');
+        const qLower = cleanQuery.toLowerCase();
+        return rootItems.filter((it) => it.name.toLowerCase().includes(qLower));
+      } catch (_) {
+        throw lastErr;
+      }
+    }
+
+    return rawItems.map((it) => this.normalizeItem(it));
+  }
+
+  async listTrash() {
+    this.validateCredentials();
+    const endpoints = [
+      `/2/drive/${this.driveId}/trash?per_page=200`,
+      `/3/drive/${this.driveId}/trash?limit=200`,
+      `/2/drive/${this.driveId}/files/trash?per_page=200`
+    ];
+
+    let lastErr = null;
+    for (const ep of endpoints) {
+      try {
+        const res = await this.requestJson(ep);
+        if (Array.isArray(res?.data)) {
+          return res.data.map((it) => ({
+            ...this.normalizeItem(it),
+            isTrash: true
+          }));
+        }
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+
+    if (lastErr) throw lastErr;
+    return [];
+  }
+
+  async restoreTrashItem(fileId) {
+    this.validateCredentials();
+    const endpoints = [
+      `/2/drive/${this.driveId}/trash/${encodeURIComponent(fileId)}/restore`,
+      `/3/drive/${this.driveId}/trash/${encodeURIComponent(fileId)}/restore`
+    ];
+
+    let lastErr = null;
+    for (const ep of endpoints) {
+      try {
+        await this.requestJson(ep, { method: 'POST' });
+        return { restored: true };
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    throw lastErr || new Error('Impossible de restaurer cet élément depuis la corbeille.');
+  }
+
+  async deleteTrashItemPermanently(fileId) {
+    this.validateCredentials();
+    try {
+      await this.requestJson(`/2/drive/${this.driveId}/trash/${encodeURIComponent(fileId)}`, {
+        method: 'DELETE'
+      });
+    } catch (_) {
+      await this.requestJson(`/3/drive/${this.driveId}/trash/${encodeURIComponent(fileId)}`, {
+        method: 'DELETE'
+      });
+    }
+    return { deletedPermanently: true };
+  }
+
+  async emptyTrash() {
+    this.validateCredentials();
+    try {
+      await this.requestJson(`/2/drive/${this.driveId}/trash`, {
+        method: 'DELETE'
+      });
+    } catch (_) {
+      await this.requestJson(`/3/drive/${this.driveId}/trash`, {
+        method: 'DELETE'
+      });
+    }
+    return { emptied: true };
   }
 }
 
