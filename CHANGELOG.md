@@ -3,9 +3,15 @@
 Toutes les modifications notables de **KVault Desktop** sont documentées dans ce fichier.
 Ce projet respecte le format [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et le [Semantic Versioning](https://semver.org/lang/fr/).
 
-## [Non publié] — Prévu pour `v0.5.0`
-- Sauvegarde automatique programmée de dossiers locaux Windows vers Infomaniak kDrive.
-- Export chiffré de secours du coffre-fort Bitwarden directement dans kDrive.
+## [0.5.0] - 2026-11-09
+### Ajouté
+- **💑 Module Budget & Dépenses de Couple (`budget-service.js`)** :
+  - **Séparation des 2 profils personnalisables** (prénoms, icônes, revenus mensuels optionnels et calcul automatique du prorata des revenus ou 50/50).
+  - **Calcul automatique de l'équilibre ("Qui doit combien à qui ?")** en temps réel, avec prise en charge des répartitions `50/50`, `Ratio du couple`, `% personnalisé`, `Montant exact (€)` et `Avance 100%`, ainsi qu'un bouton **Marquer comme remboursé** en 1 clic.
+  - **Suivi des dépenses communes** avec statut basculable (`✅ Payé` / `⏳ À payer`), notes détaillées, filtres par payeur/catégorie/statut et graphique de répartition par catégorie (*Courses*, *Loyer*, *Factures*, *Sorties*, *Maison*, *Vacances*).
+  - **📎 Justificatifs & Tickets de caisse sur kDrive** : envoi direct d'une facture PDF ou photo de ticket dans le dossier `Justificatifs Budget` sur kDrive et ouverture en 1 clic dans la visionneuse multimédia.
+  - **📅 Calendrier mensuel & Paiements récurrents** : grille de calendrier mensuel (Lun → Dim) + gestion des charges fixes (*Loyer*, *Électricité*, *Internet*, *Abonnements*) avec pointage mensuel en 1 clic (`✅ Payé ce mois`).
+  - **🎯 Cagnottes & Projets communs à deux** : suivi d'épargne par projet avec barre de progression bicolore et contributions individuelles.
 
 ## [0.4.0] - 2026-11-09
 ### Ajouté

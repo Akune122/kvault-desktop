@@ -87,5 +87,23 @@ contextBridge.exposeInMainWorld('kvault', {
   bwDeleteItem: (itemId) => ipcRenderer.invoke('bw:deleteItem', { itemId }),
   bwLock: () => ipcRenderer.invoke('bw:lock'),
   bwLogout: () => ipcRenderer.invoke('bw:logout'),
-  bwGeneratePassword: (options) => ipcRenderer.invoke('bw:generatePassword', options)
+  bwGeneratePassword: (options) => ipcRenderer.invoke('bw:generatePassword', options),
+
+  // Module Budget & Dépenses Couple (v0.5.0)
+  budgetGetState: () => ipcRenderer.invoke('budget:getState'),
+  budgetUpdateProfiles: (payload) => ipcRenderer.invoke('budget:updateProfiles', payload),
+  budgetAddExpense: (payload) => ipcRenderer.invoke('budget:addExpense', payload),
+  budgetUpdateExpense: (id, patch) => ipcRenderer.invoke('budget:updateExpense', { id, patch }),
+  budgetDeleteExpense: (id) => ipcRenderer.invoke('budget:deleteExpense', { id }),
+  budgetUploadReceipt: () => ipcRenderer.invoke('budget:uploadReceipt'),
+  budgetAddSettlement: (payload) => ipcRenderer.invoke('budget:addSettlement', payload),
+  budgetDeleteSettlement: (id) => ipcRenderer.invoke('budget:deleteSettlement', { id }),
+  budgetAddRecurring: (payload) => ipcRenderer.invoke('budget:addRecurring', payload),
+  budgetDeleteRecurring: (id) => ipcRenderer.invoke('budget:deleteRecurring', { id }),
+  budgetToggleRecurringPaid: (recurringId, month) =>
+    ipcRenderer.invoke('budget:toggleRecurringPaid', { recurringId, month }),
+  budgetAddGoal: (payload) => ipcRenderer.invoke('budget:addGoal', payload),
+  budgetContributeGoal: (goalId, profileId, deltaAmount) =>
+    ipcRenderer.invoke('budget:contributeGoal', { goalId, profileId, deltaAmount }),
+  budgetDeleteGoal: (goalId) => ipcRenderer.invoke('budget:deleteGoal', { goalId })
 });

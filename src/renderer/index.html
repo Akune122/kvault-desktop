@@ -110,6 +110,15 @@
       </div>
 
       <div class="nav-group">
+        <div class="nav-label">VIE À DEUX &amp; BUDGET</div>
+        <button class="nav-item" data-view="budget">
+          <span class="nav-icon">💑</span>
+          <span>Dépenses Couple</span>
+          <span class="live-tag" id="budgetSidebarBadge">50/50</span>
+        </button>
+      </div>
+
+      <div class="nav-group">
         <div class="nav-label">MOTS DE PASSE</div>
         <button class="nav-item" data-view="bitwarden">
           <span class="nav-icon">🔐</span>
@@ -424,6 +433,303 @@
       </section>
 
       <!-- ================================================================ -->
+      <!-- VUE 2B : BUDGET & DÉPENSES DE COUPLE (v0.5.0)                    -->
+      <!-- ================================================================ -->
+      <section class="view-panel hidden" id="viewBudget">
+        <div class="budget-toolbar">
+          <div class="budget-month-nav">
+            <button type="button" class="icon-btn" id="btnBudgetPrevMonth" title="Mois précédent">❮</button>
+            <input type="month" id="budgetMonthPicker" class="budget-month-input" />
+            <button type="button" class="icon-btn" id="btnBudgetNextMonth" title="Mois suivant">❯</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btnBudgetCurrentMonth">Ce mois</button>
+          </div>
+
+          <div class="budget-tabs">
+            <button type="button" class="budget-tab-btn active" data-budgettab="overview">
+              <svg class="budget-tab-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 3v18h18" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M7 14l4-4 4 4 5-6" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+              <span>Dépenses &amp; Équilibre</span>
+            </button>
+            <button type="button" class="budget-tab-btn" data-budgettab="calendar">
+              <svg class="budget-tab-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="4" width="18" height="18" rx="2" />
+                <line x1="16" y1="2" x2="16" y2="6" stroke-linecap="round" />
+                <line x1="8" y1="2" x2="8" y2="6" stroke-linecap="round" />
+                <line x1="3" y1="10" x2="21" y2="10" />
+              </svg>
+              <span>Calendrier &amp; Récurrents</span>
+            </button>
+            <button type="button" class="budget-tab-btn" data-budgettab="goals">
+              <svg class="budget-tab-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="9" />
+                <circle cx="12" cy="12" r="5" />
+                <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+              </svg>
+              <span>Cagnottes à deux</span>
+            </button>
+            <button type="button" class="budget-tab-btn" data-budgettab="profiles">
+              <svg class="budget-tab-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" stroke-linecap="round" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87" stroke-linecap="round" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" stroke-linecap="round" />
+              </svg>
+              <span>Profils &amp; Parts</span>
+            </button>
+          </div>
+
+          <div class="budget-top-actions">
+            <button type="button" class="btn btn-accent-outline" id="btnOpenNewRecurringModal">+ Paiement récurrent</button>
+            <button type="button" class="btn btn-secondary" id="btnOpenSettleModal">Rembourser / Solder</button>
+            <button type="button" class="btn btn-primary" id="btnOpenNewExpenseModal">+ Ajouter une dépense</button>
+          </div>
+        </div>
+
+        <div class="budget-scroll-area">
+          <!-- Cartes KPI & Calculateur automatique "Qui doit quoi" -->
+          <div class="budget-kpi-grid">
+            <div class="budget-kpi-card balance-highlight" id="budgetBalanceCard">
+              <div class="kpi-label">⚖️ ÉQUILIBRE AUTOMATIQUE DU COUPLE</div>
+              <div class="kpi-balance-headline" id="budgetBalanceHeadline">Comptes à l'équilibre 🎉</div>
+              <div class="kpi-sub" id="budgetBalanceSub">Aucune dette en attente entre vous deux.</div>
+              <div class="kpi-actions">
+                <button type="button" class="btn btn-primary btn-sm hidden" id="btnQuickSettleBalance">
+                  ✅ Marquer comme remboursé
+                </button>
+              </div>
+            </div>
+
+            <div class="budget-kpi-card" id="budgetProfileACard">
+              <div class="kpi-profile-head">
+                <span class="kpi-avatar" id="kpiAvatarA">🧑🏻</span>
+                <div>
+                  <div class="kpi-profile-name" id="kpiNameA">Loïc</div>
+                  <div class="kpi-profile-share" id="kpiShareBadgeA">Part par défaut : 50%</div>
+                </div>
+              </div>
+              <div class="kpi-stat-row">
+                <span>Payé ce mois :</span>
+                <strong id="kpiPaidA">0,00 €</strong>
+              </div>
+              <div class="kpi-stat-row">
+                <span>Part théorique :</span>
+                <span id="kpiShouldPayA">0,00 €</span>
+              </div>
+            </div>
+
+            <div class="budget-kpi-card" id="budgetProfileBCard">
+              <div class="kpi-profile-head">
+                <span class="kpi-avatar" id="kpiAvatarB">👩🏻</span>
+                <div>
+                  <div class="kpi-profile-name" id="kpiNameB">Ma Copine</div>
+                  <div class="kpi-profile-share" id="kpiShareBadgeB">Part par défaut : 50%</div>
+                </div>
+              </div>
+              <div class="kpi-stat-row">
+                <span>Payé ce mois :</span>
+                <strong id="kpiPaidB">0,00 €</strong>
+              </div>
+              <div class="kpi-stat-row">
+                <span>Part théorique :</span>
+                <span id="kpiShouldPayB">0,00 €</span>
+              </div>
+            </div>
+
+            <div class="budget-kpi-card">
+              <div class="kpi-label">📅 BILAN DU MOIS SÉLECTIONNÉ</div>
+              <div class="kpi-total-amount" id="kpiMonthTotal">0,00 €</div>
+              <div class="kpi-stat-row">
+                <span>Dépenses réglées :</span>
+                <strong id="kpiMonthPaidCount">0</strong>
+              </div>
+              <div class="kpi-stat-row">
+                <span>Reste à payer :</span>
+                <strong id="kpiMonthPendingAmount">0,00 €</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- SOUS-VUE 1 : LISTE DES DÉPENSES & RÉPARTITION -->
+          <div class="budget-subview" id="budgetTabOverview">
+            <div class="budget-filters-bar">
+              <div class="search-box">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="budgetSearchInput" placeholder="Rechercher une dépense, note, magasin..." />
+              </div>
+
+              <select id="budgetFilterPayer" class="sort-select">
+                <option value="all">👫 Tous les payeurs</option>
+                <option value="A" id="budgetFilterOptA">Payé par Loïc</option>
+                <option value="B" id="budgetFilterOptB">Payé par Ma Copine</option>
+                <option value="both">Payé à deux</option>
+              </select>
+
+              <select id="budgetFilterStatus" class="sort-select">
+                <option value="all">📌 Tous les statuts</option>
+                <option value="paid">✅ Payé</option>
+                <option value="pending">⏳ À payer / En attente</option>
+              </select>
+
+              <select id="budgetFilterCategory" class="sort-select">
+                <option value="all">🏷️ Toutes les catégories</option>
+                <option value="groceries">🛒 Courses &amp; Supermarché</option>
+                <option value="rent">🏠 Loyer &amp; Charges</option>
+                <option value="bills">⚡ Énergie, Internet &amp; Abonnements</option>
+                <option value="restaurant">🍽️ Resto, Sorties &amp; Loisirs</option>
+                <option value="home">🛋️ Maison &amp; Équipement</option>
+                <option value="vacation">✈️ Vacances &amp; Week-ends</option>
+                <option value="other">📦 Autre dépense</option>
+              </select>
+            </div>
+
+            <div class="budget-overview-cols">
+              <div class="budget-main-col">
+                <div class="budget-section-card">
+                  <div class="card-section-title">
+                    <span>🧾 Dépenses communes du mois</span>
+                    <span class="hint" id="budgetExpensesCountLabel">0 dépense(s)</span>
+                  </div>
+                  <div id="budgetExpensesList" class="budget-expenses-list"></div>
+                </div>
+              </div>
+
+              <div class="budget-side-col">
+                <div class="budget-section-card">
+                  <div class="card-section-title">
+                    <span>📊 Répartition par catégorie</span>
+                  </div>
+                  <div id="budgetCategoryBreakdown" class="budget-cat-breakdown"></div>
+                </div>
+
+                <div class="budget-section-card">
+                  <div class="card-section-title">
+                    <span>🤝 Historique des remboursements</span>
+                  </div>
+                  <div id="budgetSettlementsList" class="budget-settlements-list"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SOUS-VUE 2 : CALENDRIER MENSUEL & PAIEMENTS RÉCURRENTS -->
+          <div class="budget-subview hidden" id="budgetTabCalendar">
+            <div class="budget-calendar-layout">
+              <div class="budget-section-card budget-calendar-card">
+                <div class="card-section-title">
+                  <span id="budgetCalendarTitle">📅 Calendrier des échéances &amp; dépenses</span>
+                  <span class="hint">Cliquez sur une échéance à droite pour la pointer comme payée</span>
+                </div>
+                <div class="calendar-weekdays">
+                  <div>Lun</div>
+                  <div>Mar</div>
+                  <div>Mer</div>
+                  <div>Jeu</div>
+                  <div>Ven</div>
+                  <div>Sam</div>
+                  <div>Dim</div>
+                </div>
+                <div class="calendar-grid" id="budgetCalendarGrid"></div>
+              </div>
+
+              <div class="budget-section-card budget-recurring-card">
+                <div class="card-section-title">
+                  <span>🔄 Charges fixes &amp; Paiements récurrents</span>
+                  <button type="button" class="btn btn-primary btn-sm" id="btnAddRecurringFromTab">+ Ajouter</button>
+                </div>
+                <p class="hint">
+                  Pointez vos prélèvements mensuels (Loyer, Électricité, Internet, Abonnements) dès qu'ils sont payés :
+                  ils s'ajoutent automatiquement aux dépenses du mois !
+                </p>
+                <div id="budgetRecurringList" class="budget-recurring-list"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SOUS-VUE 3 : CAGNOTTES & PROJETS À DEUX -->
+          <div class="budget-subview hidden" id="budgetTabGoals">
+            <div class="budget-section-card">
+              <div class="card-section-title">
+                <span>🎯 Cagnottes &amp; Projets communs à deux (Vacances, Meubles, Épargne...)</span>
+                <button type="button" class="btn btn-primary btn-sm" id="btnOpenNewGoalModal">+ Nouvelle cagnotte</button>
+              </div>
+              <div id="budgetGoalsGrid" class="budget-goals-grid"></div>
+            </div>
+          </div>
+
+          <!-- SOUS-VUE 4 : PROFILS DU COUPLE & RÈGLE DE SÉPARATION -->
+          <div class="budget-subview hidden" id="budgetTabProfiles">
+            <form id="budgetProfilesForm" class="settings-card">
+              <div class="card-section-title">
+                <span>💑 Personnalisation des 2 Profils &amp; Calcul de séparation par défaut</span>
+              </div>
+              <p class="hint">
+                Personnalisez vos prénoms, icônes et choisissez votre répartition par défaut (50% / 50% ou proportionnelle à vos revenus).
+                Vous pourrez toujours choisir une répartition différente sur chaque dépense !
+              </p>
+
+              <div class="form-grid-2">
+                <div class="budget-profile-edit-box">
+                  <h4>Profil 1</h4>
+                  <div class="form-row">
+                    <label for="inputProfileNameA">Prénom / Surnom</label>
+                    <input type="text" id="inputProfileNameA" placeholder="Loïc" required />
+                  </div>
+                  <div class="form-grid-2">
+                    <div class="form-row">
+                      <label for="inputProfileEmojiA">Emoji</label>
+                      <input type="text" id="inputProfileEmojiA" value="🧑🏻" maxlength="4" />
+                    </div>
+                    <div class="form-row">
+                      <label for="inputProfileIncomeA">Revenu net mensuel (optionnel)</label>
+                      <input type="number" id="inputProfileIncomeA" min="0" step="10" placeholder="Ex : 2200" />
+                    </div>
+                  </div>
+                </div>
+
+                <div class="budget-profile-edit-box">
+                  <h4>Profil 2</h4>
+                  <div class="form-row">
+                    <label for="inputProfileNameB">Prénom / Surnom</label>
+                    <input type="text" id="inputProfileNameB" placeholder="Ma Copine" required />
+                  </div>
+                  <div class="form-grid-2">
+                    <div class="form-row">
+                      <label for="inputProfileEmojiB">Emoji</label>
+                      <input type="text" id="inputProfileEmojiB" value="👩🏻" maxlength="4" />
+                    </div>
+                    <div class="form-row">
+                      <label for="inputProfileIncomeB">Revenu net mensuel (optionnel)</label>
+                      <input type="number" id="inputProfileIncomeB" min="0" step="10" placeholder="Ex : 1800" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="budget-split-slider-box">
+                <div class="split-slider-header">
+                  <span id="sliderLabelProfileA">Loïc : 50%</span>
+                  <button type="button" class="btn btn-accent-outline btn-sm" id="btnCalcIncomeProrata">
+                    ⚖️ Calculer selon nos revenus
+                  </button>
+                  <button type="button" class="btn btn-secondary btn-sm" id="btnResetEqualSplit">
+                    50% / 50%
+                  </button>
+                  <span id="sliderLabelProfileB">Ma Copine : 50%</span>
+                </div>
+                <input type="range" id="inputDefaultShareA" min="0" max="100" value="50" />
+              </div>
+
+              <div class="form-actions">
+                <button type="submit" class="btn btn-primary">💾 Enregistrer les profils &amp; la répartition</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================ -->
       <!-- VUE 3 : PARAMÈTRES, SÉCURITÉ & PRODUCTIVITÉ WINDOWS              -->
       <!-- ================================================================ -->
       <section class="view-panel hidden" id="viewSettings">
@@ -440,7 +746,7 @@
           <div class="settings-card update-card">
             <div class="card-section-title">
               <span>🚀 Version &amp; Mises à jour GitHub</span>
-              <span class="code-status-pill custom" id="settingsVersionBadge">v0.4.0</span>
+              <span class="code-status-pill custom" id="settingsVersionBadge">v0.5.0</span>
             </div>
             <div class="update-row">
               <div class="update-status-text" id="updateStatusText">
@@ -867,6 +1173,254 @@
         <button type="button" class="btn btn-accent-outline" id="btnRegeneratePass">↻ Régénérer</button>
         <button type="button" class="btn btn-primary" id="btnCopyGeneratedPass">📋 Copier</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ====================================================================== -->
+  <!-- MODALES BUDGET & DÉPENSES DE COUPLE (v0.5.0)                           -->
+  <!-- ====================================================================== -->
+  <!-- 1. Modale : Nouvelle Dépense Commune -->
+  <div class="modal-backdrop hidden" id="budgetExpenseModal">
+    <div class="modal-card modal-wide">
+      <h3>🧾 Ajouter une dépense commune</h3>
+      <form id="budgetExpenseForm" class="bw-form">
+        <div class="form-grid-2">
+          <div class="form-row">
+            <label for="expTitleInput">Libellé de la dépense *</label>
+            <input type="text" id="expTitleInput" placeholder="Ex : Courses Leclerc, Loyer, Resto..." required />
+          </div>
+          <div class="form-row">
+            <label for="expAmountInput">Montant (€) *</label>
+            <input type="number" id="expAmountInput" min="0.01" step="0.01" placeholder="Ex : 84.50" required />
+          </div>
+        </div>
+
+        <div class="form-grid-3">
+          <div class="form-row">
+            <label for="expCategoryInput">Catégorie</label>
+            <select id="expCategoryInput">
+              <option value="groceries">🛒 Courses &amp; Supermarché</option>
+              <option value="rent">🏠 Loyer &amp; Charges</option>
+              <option value="bills">⚡ Énergie, Internet &amp; Abos</option>
+              <option value="restaurant">🍽️ Sorties, Resto &amp; Loisirs</option>
+              <option value="home">🛋️ Maison &amp; Équipement</option>
+              <option value="vacation">✈️ Vacances &amp; Week-ends</option>
+              <option value="other">📦 Autre</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="expDateInput">Date</label>
+            <input type="date" id="expDateInput" required />
+          </div>
+          <div class="form-row">
+            <label for="expStatusInput">Statut du paiement</label>
+            <select id="expStatusInput">
+              <option value="paid">✅ Déjà payé</option>
+              <option value="pending">⏳ À payer plus tard</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-row">
+            <label for="expPaidByInput">Qui a avancé / payé ?</label>
+            <select id="expPaidByInput">
+              <option value="A" id="expPaidByOptA">🧑🏻 Loïc</option>
+              <option value="B" id="expPaidByOptB">👩🏻 Ma Copine</option>
+              <option value="both">👫 Déjà payé à deux</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="expSplitModeInput">Comment séparer la dépense ?</label>
+            <select id="expSplitModeInput">
+              <option value="equal">⚖️ 50% / 50% (Moitié-moitié)</option>
+              <option value="default" id="expSplitDefaultOpt">💑 Selon notre ratio de couple</option>
+              <option value="percent">📊 Pourcentage personnalisé (%)</option>
+              <option value="exact">💶 Montant exact en €</option>
+              <option value="full_B" id="expSplitFullBOpt">➡️ 100% pour Ma Copine (avance)</option>
+              <option value="full_A" id="expSplitFullAOpt">⬅️ 100% pour Loïc (avance)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Champs conditionnels si Pourcentage personnalisé ou Montant exact -->
+        <div class="form-grid-2 hidden" id="expCustomPercentRow">
+          <div class="form-row">
+            <label for="expSplitPercentAInput" id="lblExpPercentA">Part de Loïc (%)</label>
+            <input type="number" id="expSplitPercentAInput" min="0" max="100" value="50" />
+          </div>
+          <div class="form-row">
+            <label>Aperçu de la répartition</label>
+            <div class="split-live-preview" id="expSplitLivePreview">50% / 50%</div>
+          </div>
+        </div>
+
+        <div class="form-grid-2 hidden" id="expCustomExactRow">
+          <div class="form-row">
+            <label for="expExactShareAInput" id="lblExpExactA">Montant pour Loïc (€)</label>
+            <input type="number" id="expExactShareAInput" min="0" step="0.01" placeholder="Ex : 30.00" />
+          </div>
+          <div class="form-row">
+            <label>Reste automatique pour l'autre</label>
+            <div class="split-live-preview" id="expExactLivePreview">0,00 €</div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label for="expNotesInput">Infos / Détails / Liste (optionnel)</label>
+          <input type="text" id="expNotesInput" placeholder="Ex : Courses de la semaine + produits ménagers..." />
+        </div>
+
+        <div class="form-row">
+          <label>Facture / Photo du ticket de caisse sur kDrive (optionnel)</label>
+          <div class="receipt-attach-row">
+            <button type="button" class="btn btn-accent-outline btn-sm" id="btnAttachExpenseReceipt">
+              📎 Joindre une facture / photo sur kDrive
+            </button>
+            <span class="hint" id="expAttachedReceiptLabel">Aucun justificatif joint</span>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="btnCancelExpenseModal">Annuler</button>
+          <button type="submit" class="btn btn-primary">💾 Enregistrer la dépense</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 2. Modale : Nouveau Paiement Récurrent / Charge Fixe -->
+  <div class="modal-backdrop hidden" id="budgetRecurringModal">
+    <div class="modal-card modal-wide">
+      <h3>📅 Ajouter un paiement récurrent (Calendrier mensuel)</h3>
+      <form id="budgetRecurringForm" class="bw-form">
+        <div class="form-grid-2">
+          <div class="form-row">
+            <label for="recTitleInput">Nom de la charge fixe *</label>
+            <input type="text" id="recTitleInput" placeholder="Ex : Loyer Appartement, EDF, Fibre Orange, Netflix..." required />
+          </div>
+          <div class="form-row">
+            <label for="recAmountInput">Montant mensuel (€) *</label>
+            <input type="number" id="recAmountInput" min="0.01" step="0.01" placeholder="Ex : 850.00" required />
+          </div>
+        </div>
+
+        <div class="form-grid-3">
+          <div class="form-row">
+            <label for="recDayInput">Jour du prélèvement (1 à 31)</label>
+            <input type="number" id="recDayInput" min="1" max="31" value="5" required />
+          </div>
+          <div class="form-row">
+            <label for="recCategoryInput">Catégorie</label>
+            <select id="recCategoryInput">
+              <option value="rent">🏠 Loyer &amp; Charges</option>
+              <option value="bills">⚡ Énergie, Internet &amp; Abos</option>
+              <option value="groceries">🛒 Courses</option>
+              <option value="home">🛋️ Maison &amp; Assurances</option>
+              <option value="other">📦 Autre</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="recPaidByInput">Prélevé sur le compte de</label>
+            <select id="recPaidByInput">
+              <option value="A" id="recPaidByOptA">🧑🏻 Loïc</option>
+              <option value="B" id="recPaidByOptB">👩🏻 Ma Copine</option>
+              <option value="both">👫 Compte commun / Payé à deux</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-row">
+            <label for="recSplitModeInput">Mode de séparation</label>
+            <select id="recSplitModeInput">
+              <option value="equal">⚖️ 50% / 50% (Moitié-moitié)</option>
+              <option value="default">💑 Selon notre ratio de couple</option>
+              <option value="percent">📊 Pourcentage personnalisé (%)</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="recNotesInput">Infos (optionnel)</label>
+            <input type="text" id="recNotesInput" placeholder="Ex : Prélèvement SEPA automatique..." />
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="btnCancelRecurringModal">Annuler</button>
+          <button type="submit" class="btn btn-primary">📅 Ajouter au calendrier</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 3. Modale : Rembourser / Solder les comptes -->
+  <div class="modal-backdrop hidden" id="budgetSettleModal">
+    <div class="modal-card">
+      <h3>🤝 Enregistrer un remboursement</h3>
+      <form id="budgetSettleForm" class="bw-form">
+        <div class="form-row">
+          <label for="settleDirectionSelect">Qui rembourse qui ?</label>
+          <select id="settleDirectionSelect">
+            <option value="B_to_A" id="settleOptBtoA">👩🏻 Ma Copine rembourse 🧑🏻 Loïc</option>
+            <option value="A_to_B" id="settleOptAtoB">🧑🏻 Loïc rembourse 👩🏻 Ma Copine</option>
+          </select>
+        </div>
+        <div class="form-grid-2">
+          <div class="form-row">
+            <label for="settleAmountInput">Montant remboursé (€) *</label>
+            <input type="number" id="settleAmountInput" min="0.01" step="0.01" placeholder="Ex : 120.00" required />
+          </div>
+          <div class="form-row">
+            <label for="settleDateInput">Date du virement</label>
+            <input type="date" id="settleDateInput" required />
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="settleNoteInput">Note (optionnel)</label>
+          <input type="text" id="settleNoteInput" placeholder="Ex : Virement Wero / Lydia / RIB du mois" />
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="btnCancelSettleModal">Annuler</button>
+          <button type="submit" class="btn btn-primary">✅ Valider le remboursement</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 4. Modale : Nouvelle Cagnotte / Projet à deux -->
+  <div class="modal-backdrop hidden" id="budgetGoalModal">
+    <div class="modal-card">
+      <h3>🎯 Nouvelle cagnotte / Projet à deux</h3>
+      <form id="budgetGoalForm" class="bw-form">
+        <div class="form-grid-2">
+          <div class="form-row">
+            <label for="goalTitleInput">Nom du projet *</label>
+            <input type="text" id="goalTitleInput" placeholder="Ex : Vacances en Italie, Nouveau Canapé..." required />
+          </div>
+          <div class="form-row">
+            <label for="goalEmojiInput">Icône</label>
+            <input type="text" id="goalEmojiInput" value="✈️" maxlength="4" />
+          </div>
+        </div>
+        <div class="form-grid-2">
+          <div class="form-row">
+            <label for="goalTargetInput">Objectif total (€) *</label>
+            <input type="number" id="goalTargetInput" min="1" step="1" placeholder="Ex : 1200" required />
+          </div>
+          <div class="form-row">
+            <label for="goalDeadlineInput">Date cible (optionnel)</label>
+            <input type="date" id="goalDeadlineInput" />
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="goalNotesInput">Infos / Idées (optionnel)</label>
+          <input type="text" id="goalNotesInput" placeholder="Ex : Vol + Hôtel 1 semaine..." />
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="btnCancelGoalModal">Annuler</button>
+          <button type="submit" class="btn btn-primary">🎯 Créer la cagnotte</button>
+        </div>
+      </form>
     </div>
   </div>
 

@@ -22,37 +22,31 @@ function getGitHubTokenFromGitCredential() {
 }
 
 function buildReleaseTitle(tagName) {
-  return `KVault Desktop ${tagName} — Explorateur kDrive Power-User & Quick-Vault Windows`;
+  return `KVault Desktop ${tagName} — Module Budget & Dépenses de Couple`;
 }
 
 function buildReleaseBody(version) {
-  return `## 🚀 KVault Desktop \`v${version}\` — Explorateur kDrive Power-User & Expérience Windows Productivité
+  return `## 🚀 KVault Desktop \`v${version}\` — Module Budget & Dépenses de Couple
 
-Bienvenue dans la version **\`v${version}\`** de **KVault Desktop**, l'application Windows tout-en-un qui réunit votre cloud **Infomaniak kDrive** et votre coffre-fort de mots de passe **Bitwarden / Vaultwarden**.
+Bienvenue dans la version **\`v${version}\`** de **KVault Desktop**, l'application Windows tout-en-un qui réunit votre cloud **Infomaniak kDrive**, votre coffre-fort de mots de passe **Bitwarden / Vaultwarden** et désormais votre gestionnaire complet de **Dépenses & Budget de Couple**.
 
 ---
 
 ### ✨ Nouveautés majeures de la \`v${version}\`
 
-#### 🗂️ Pack Explorateur kDrive "Power-User"
-- **Multi-sélection & Actions groupées (Batch)** :
-  - Cases à cocher sur les cartes fichiers, sélection rapide avec \`Ctrl + Clic\` et bouton **\`☑️ Tout\`** dans la barre d'outils.
-  - Barre flottante d'actions groupées : **Télécharger la sélection** *(choisissez un dossier Windows une seule fois)*, **Déplacer vers...** et **Supprimer en lot**.
-- **Tri personnalisé & Recherche globale kDrive** :
-  - Tri instantané par **Nom (\`A → Z\` / \`Z → A\`)**, **Date (\`Plus récents\` / \`Plus anciens\`)** ou **Taille (\`Plus volumineux\` / \`Plus légers\`)** (les dossiers restent toujours groupés en tête).
-  - Bouton **\`🌐 Tout kDrive\`** (\`Entrée\`) pour rechercher un fichier ou dossier dans l'intégralité de votre kDrive via l'API Infomaniak.
-- **⭐ Favoris kDrive & 🗑️ Corbeille kDrive intégrée** :
-  - Épinglez vos dossiers et fichiers fréquents dans **\`⭐ Favoris kDrive\`** via le clic-droit ou le bouton étoile.
-  - Gérez votre **\`🗑️ Corbeille kDrive\`** directement dans l'application : **Restaurer** un ou plusieurs éléments, **Supprimer définitivement** ou **Vider la corbeille**.
-
-#### ⚡ Pack Expérience Windows "Productivité"
-- **Palette globale Quick-Vault (\`Ctrl+Maj+K\` partout dans Windows)** :
-  - Appuyez sur **\`Ctrl+Maj+K\`** depuis n'importe quel navigateur, jeu ou logiciel Windows pour faire surgir la recherche rapide **Bitwarden Quick-Vault** au premier plan.
-  - Navigation 100 % clavier (\`↑\` / \`↓\`, \`Entrée\` pour copier le mot de passe avec purge auto 20s, \`Ctrl+U\` pour l'identifiant, \`Ctrl+T\` pour le code 2FA TOTP, déverrouillage express intégré si le coffre est verrouillé).
-- **Démarrage automatique avec Windows (\`LAUNCH_AT_STARTUP\`)** :
-  - Option activable en 1 clic dans **⚙️ Paramètres & Sécurité** pour lancer KVault Desktop discrètement dans le System Tray à l'ouverture de session Windows.
-- **Vérificateur de mise à jour GitHub intégré** :
-  - Vérifiez en 1 clic depuis **⚙️ Paramètres & Sécurité** si une nouvelle version GitHub Release est disponible et téléchargez directement le nouveau \`.exe\`.
+#### 💑 Nouveau Module : Dépenses & Budget de Couple
+- **Calcul automatique de l'équilibre ("Qui doit combien à qui ?")** :
+  - Séparation des **2 profils personnalisables** (prénoms, emojis, revenus mensuels optionnels).
+  - Règles de partage flexibles sur chaque dépense : **50% / 50%**, **Prorata automatique des revenus** (ex: \`60% / 40%\`), **Pourcentage personnalisé**, **Montant exact en €** ou **Avance 100%**.
+  - Calcul en temps réel de la part théorique vs dépenses payées par chacun et bouton **\`✅ Marquer comme remboursé\`** en 1 clic avec historique des virements.
+- **Statut de paiement & Justificatifs liés à kDrive** :
+  - Basculez une dépense entre **\`✅ Payé\`** et **\`⏳ À payer\`** en un clic, ajoutez des infos/notes et filtrez par payeur, statut ou catégorie (*Courses*, *Loyer*, *Factures*, *Resto*, *Maison*, *Vacances*).
+  - **📎 Factures & Tickets de caisse sur kDrive** : joignez un PDF ou une photo de ticket directement depuis une dépense — il est sauvegardé automatiquement dans le dossier \`Justificatifs Budget\` de votre kDrive et s'ouvre dans la visionneuse intégrée !
+- **📅 Calendrier mensuel & Paiements récurrents** :
+  - Planifiez vos charges fixes mensuelles (*Loyer*, *Électricité*, *Fibre Internet*, *Abonnements*) avec leur jour de prélèvement.
+  - Visualisez-les sur le **calendrier mensuel** (\`✅ Payé\`, \`⏳ À venir\`, \`⚠️ En retard\`) et pointez-les en 1 clic dès qu'elles sont payées pour les injecter dans les dépenses du mois.
+- **🎯 Cagnottes & Projets communs à deux** :
+  - Créez des cagnottes pour vos projets (*Vacances*, *Équipement maison*, *Cadeaux*) et suivez la barre de progression bicolore avec les contributions de chacun.
 
 ---
 
@@ -60,7 +54,7 @@ Bienvenue dans la version **\`v${version}\`** de **KVault Desktop**, l'applicati
 
 1. Téléchargez le fichier **\`KVault-Desktop-${version}-Portable.exe\`** ci-dessous dans la section **Assets**.
 2. Lancez l'application et tapez votre code d'accès (**\`0000\`** par défaut lors d'une première installation).
-3. Utilisez **\`Ctrl+Maj+K\`** à tout moment sous Windows pour ouvrir votre palette **Quick-Vault Bitwarden** !`;
+3. Ouvrez l'onglet **\`💑 Dépenses Couple\`** dans la barre latérale gauche !`;
 }
 
 async function main() {

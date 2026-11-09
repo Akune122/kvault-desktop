@@ -4,7 +4,7 @@
 
 <br />
 
-[![Version](https://img.shields.io/badge/version-0.4.0-0098FF?style=for-the-badge&logo=semanticrelease&logoColor=white)](https://github.com/Akune122/kvault-desktop/releases)
+[![Version](https://img.shields.io/badge/version-0.5.0-0098FF?style=for-the-badge&logo=semanticrelease&logoColor=white)](https://github.com/Akune122/kvault-desktop/releases)
 [![Platform](https://img.shields.io/badge/Windows-10%20%2F%2011%20(.exe)-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Akune122/kvault-desktop/releases)
 [![Electron](https://img.shields.io/badge/Electron-33-47848F?style=for-the-badge&logo=electron&logoColor=white)](https://www.electronjs.org/)
 [![Infomaniak kDrive](https://img.shields.io/badge/Cloud-Infomaniak%20kDrive-00E5FF?style=for-the-badge&logo=icloud&logoColor=white)](#1-configuration-infomaniak-kdrive)
@@ -12,7 +12,7 @@
 [![License](https://img.shields.io/badge/License-MIT-818CF8?style=for-the-badge)](./LICENSE)
 
 <p align="center">
-  <strong>Hub personnel sécurisé sur Windows (<code>.exe</code>) réunissant un explorateur &amp; galerie multimédia <a href="https://www.infomaniak.com/fr/ksuite/kdrive">Infomaniak kDrive</a> et un gestionnaire de mots de passe <a href="https://bitwarden.com/">Bitwarden / Vaultwarden</a> avec Quick-Vault global (<code>Ctrl+Maj+K</code>), System Tray &amp; verrouillage automatique.</strong>
+  <strong>Hub personnel sécurisé sur Windows (<code>.exe</code>) réunissant un explorateur &amp; galerie multimédia <a href="https://www.infomaniak.com/fr/ksuite/kdrive">Infomaniak kDrive</a>, un gestionnaire de mots de passe <a href="https://bitwarden.com/">Bitwarden / Vaultwarden</a> avec Quick-Vault (<code>Ctrl+Maj+K</code>) et un gestionnaire complet de <strong>Budget &amp; Dépenses de Couple</strong>.</strong>
 </p>
 
 </div>
@@ -23,21 +23,22 @@
 
 <div align="center">
 
-[![Télécharger KVault Desktop v0.4.0 (.exe)](https://img.shields.io/badge/%E2%AC%87%EF%B8%8F_T%C3%A9l%C3%A9charger_KVault--Desktop--0.4.0--Portable.exe-0098FF?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Akune122/kvault-desktop/releases/download/v0.4.0/KVault-Desktop-0.4.0-Portable.exe)
+[![Télécharger KVault Desktop v0.5.0 (.exe)](https://img.shields.io/badge/%E2%AC%87%EF%B8%8F_T%C3%A9l%C3%A9charger_KVault--Desktop--0.5.0--Portable.exe-0098FF?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Akune122/kvault-desktop/releases/download/v0.5.0/KVault-Desktop-0.5.0-Portable.exe)
 
 </div>
 
 Vous souhaitez utiliser l'application directement sans installer Node.js ?
-1. Cliquez sur le bouton ci-dessus ou rendez-vous dans l'onglet **[Releases GitHub](https://github.com/Akune122/kvault-desktop/releases/tag/v0.4.0)** pour télécharger **`KVault-Desktop-0.4.0-Portable.exe`**.
+1. Cliquez sur le bouton ci-dessus ou rendez-vous dans l'onglet **[Releases GitHub](https://github.com/Akune122/kvault-desktop/releases/tag/v0.5.0)** pour télécharger **`KVault-Desktop-0.5.0-Portable.exe`**.
 2. Lancez l'exécutable : le **code de déverrouillage initial par défaut est `0000`**.
 3. Rendez-vous dans **⚙️ Paramètres & Sécurité** dans l'application pour définir votre propre code/mot de passe et connecter votre **kDrive** ainsi que votre coffre **Bitwarden** !
 
 ---
 
-## ✨ Fonctionnalités principales (`v0.4.0`)
+## ✨ Fonctionnalités principales (`v0.5.0`)
 
 | Module | Fonctionnalités incluses |
 | :--- | :--- |
+| 💑 **Budget & Dépenses Couple** | **2 profils personnalisables**, calcul automatique **"Qui doit combien à qui"** (`50/50`, prorata revenus, `%` ou montant exact), **statut Payé / À payer**, **Calendrier mensuel des paiements récurrents**, **Cagnottes à deux** et **tickets de caisse liés à kDrive**. |
 | ⚡ **Quick-Vault Global (`Ctrl+Maj+K`)** | **Palette Spotlight Bitwarden** invocable depuis n'importe quelle application Windows (`Ctrl+Maj+K`), navigation clavier (`↑`/`↓`, `Entrée` mot de passe, `Ctrl+U` identifiant, `Ctrl+T` 2FA TOTP) et déverrouillage express intégré. |
 | 🗂️ **Explorateur kDrive Power-User** | **Multi-sélection & Actions groupées (Batch)** (*Télécharger*, *Déplacer*, *Supprimer*, *Restaurer*), **Tri personnalisé** (Nom, Date, Taille), **Recherche globale sur tout kDrive**, **⭐ Favoris** et **🗑️ Corbeille kDrive** intégrée. |
 | 🖼️ **Galerie & Streaming Multimédia** | **Miniatures photos réelles** avec cache disque rapide + **Visionneuse universelle en streaming** sans téléchargement préalable (**Vidéo**, **Audio**, **PDF natif**, **Photos avec Zoom**, **Code/JSON/Markdown**) et navigation clavier (`←` / `→`). |
@@ -104,7 +105,7 @@ npm run build:exe
 ```
 
 L'exécutable autonome est généré dans :
-- `dist/KVault-Desktop-0.4.0-Portable.exe`
+- `dist/KVault-Desktop-0.5.0-Portable.exe`
 
 ---
 
@@ -128,11 +129,12 @@ kvault-desktop/
 │   │   └── preload.js           # Pont ContextBridge sécurisé
 │   ├── services/
 │   │   ├── bitwarden-service.js # Moteur local chiffré Bitwarden / Vaultwarden
+│   │   ├── budget-service.js    # Moteur Budget & Dépenses de Couple (Équilibre, Calendrier, Cagnottes)
 │   │   ├── kdrive-api.js        # Client REST API Infomaniak kDrive (streaming, recherche, corbeille, partage)
 │   │   ├── kdrive-webdav.js     # Client WebDAV Infomaniak natif
 │   │   └── kdrive-manager.js    # Façade multi-protocole kDrive
 │   └── renderer/
-│       ├── index.html           # Interface Desktop (Explorateur Power-User, Quick-Vault, Bitwarden, Settings)
+│       ├── index.html           # Interface Desktop (kDrive, Budget Couple, Quick-Vault, Bitwarden, Settings)
 │       ├── styles.css           # Thème Dark Glassmorphism
 │       └── app.js               # Logique frontend complète
 ├── .env.example                 # Modèle de configuration documenté
@@ -148,7 +150,7 @@ kvault-desktop/
 - [x] **`v0.2.0` — Coffre-fort Bitwarden / Vaultwarden & Verrouillage Application (`APP_LOCK_CODE`)**
 - [x] **`v0.3.0` — Galerie Multimédia Streaming, Partage Public kDrive & Intégration Windows System Tray**
 - [x] **`v0.4.0` — Explorateur kDrive Power-User (Multi-sélection, Tri, Favoris, Corbeille) & Quick-Vault Global (`Ctrl+Maj+K`)**
-- [ ] **`v0.5.0` — Synchronisation programmée & Backup chiffré automatique vers kDrive**
+- [x] **`v0.5.0` — Module Budget & Dépenses de Couple (Profils, Calcul automatique, Calendrier récurrent, Cagnottes & Tickets kDrive)**
 
 ---
 

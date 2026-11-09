@@ -18,6 +18,7 @@ const crypto = require('crypto');
 const { loadConfig, saveConfig } = require('./config');
 const { createKDriveClient, getRootFolderId, isConfigured } = require('../services/kdrive-manager');
 const { BitwardenService } = require('../services/bitwarden-service');
+const { BudgetService } = require('../services/budget-service');
 
 // ============================================================================
 // Protocole sécurisé de streaming local kDrive (v0.3.0+ : Vidéo, Audio, PDF, Miniatures)
@@ -45,6 +46,7 @@ let isMediaPlaying = false;
 let autoLockTimer = null;
 let clipboardClearTimer = null;
 let bitwardenService = null;
+let budgetService = null;
 let registeredShortcut = null;
 
 // Verrou d'instance unique : si l'app est réduite dans le System Tray, relancer le .exe rouvre la fenêtre existante
@@ -62,6 +64,13 @@ function getBitwarden() {
     bitwardenService = new BitwardenService(app);
   }
   return bitwardenService;
+}
+
+function getBudget() {
+  if (!budgetService) {
+    budgetService = new BudgetService(app.getPath('userData'));
+  }
+  return budgetService;
 }
 
 function showAndFocusMainWindow(bringToFrontPulse = false) {
@@ -1278,6 +1287,205 @@ ipcMain.handle('bw:logout', async () => {
 ipcMain.handle('bw:generatePassword', (_event, options) => {
   const password = getBitwarden().generatePassword(options);
   return { ok: true, password };
+});
+
+// ============================================================================
+// IPC : Module Budget & Dépenses Couple (v0.5.0)
+// ============================================================================
+ipcMain.handle('budget:getState', () => {
+  try {
+    return { ok: true, data: getBudget().getState() };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('budget:updateProfiles', (_event, payload) => {
+  try {
+    const data = getBudget().updateProfiles(payload);
+    return { ok: true, data };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('budget:addExpense', (_event, payload) => {
+  try {
+    getBudget().addExpense(payload);
+    return { ok: true, data: getBudget().getState() };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('budget:updateExpense', (_event, { id, patch }) => {
+  try {
+    getBudget().updateExpense(id, patch);
+    return { ok: true, data: getBudget().getState() };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('budget:deleteExpense', (_event, { id }) => {
+  try {
+    getBudget().deleteExpense(id);
+    return { ok: true, data: getBudget().getState() };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('budget:uploadReceipt', async () => {
+  try {
+    const { config } = loadConfig(app);
+    if (!isConfigured(config)) {
+      return { ok: false, error: 'Veuillez d\'abord configurer Infomaniak kDrive pour téléverser un justificatif.' };
+    }
+
+    const picked = await dialog.showOpenDialog(mainWindow, {
+      title: 'Choisir une facture ou un ticket de caisse à sauvegarder sur kDrive',
+      properties: ['openFile'],
+      filters: [
+        {
+          name: 'Factures & Tickets (PDF, Images)',
+          extensions: ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'heic']
+        },
+        { name: 'Tous les fichiers', extensions: ['*'] }
+      ]
+    });
+
+    if (picked.canceled || !picked.filePaths.length) {
+      return { ok: true, canceled: true };
+    }
+
+    const localFilePath = picked.filePaths[0];
+    const originalName = path.basename(localFilePath);
+    const stampedName = `${new Date().toISOString().slice(0, 10)}_${originalName}`;
+
+    const client = createKDriveClient(config);
+    const rootId = getRootFolderId(config);
+    const budget = getBudget();
+    let targetFolderId = budget.getState().receiptsFolderId;
+
+    if (!targetFolderId) {
+      const rootItems = await client.listFiles(rootId);
+      const existingFolder = rootItems.find(
+        (it) => it.type === 'dir' && it.name.toLowerCase() === 'justificatifs budget'
+      );
+      if (existingFolder) {
+        targetFolderId = existingFolder.id;
+      } else {
+        const createdFolder = await client.createFolder(rootId, 'Justificatifs Budget');
+        targetFolderId = createdFolder?.id || rootId;
+      }
+      budget.setReceiptsFolderId(targetFolderId);
+    }
+
+    const uploaded = await client.uploadFile(targetFolderId, localFilePath, () => {});
+    let fileId = uploaded?.id || null;
+
+    if (!fileId) {
+      const folderFiles = await client.listFiles(targetFolderId);
+      const match = folderFiles.find((it) => it.name === originalName || it.name === stampedName);
+      if (match) fileId = match.id;
+    }
+
+    const ext = path.extname(originalName).toLowerCase();
+    const mimeMap = {
+      '.pdf': 'application/pdf',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+      '.webp': 'image/webp',
+      '.heic': 'image/heic'
+    };
+
+    return {
+      ok: true,
+      canceled: false,
+      receipt: {
+        fileId: fileId || targetFolderId,
+        fileName: originalName,
+        mimeType: mimeMap[ext] || 'application/octet-stream',
+        folderId: targetFolderId
+      }
+    };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('budget:addSettlement', (_event, payload) => {
+  try {
+    getBudget().addSettlement(payload);
+    return { ok: true, data: getBudget().getState() };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('budget:deleteSettlement', (_event, { id }) => {
+  try {
+    getBudget().deleteSettlement(id);
+    return { ok: true, data: getBudget().getState() };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('budget:addRecurring', (_event, payload) => {
+  try {
+    getBudget().addRecurring(payload);
+    return { ok: true, data: getBudget().getState() };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('budget:deleteRecurring', (_event, { id }) => {
+  try {
+    getBudget().deleteRecurring(id);
+    return { ok: true, data: getBudget().getState() };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('budget:toggleRecurringPaid', (_event, { recurringId, month }) => {
+  try {
+    const result = getBudget().toggleRecurringPaidForMonth(recurringId, month);
+    return { ok: true, paid: result.paid, data: getBudget().getState() };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('budget:addGoal', (_event, payload) => {
+  try {
+    getBudget().addGoal(payload);
+    return { ok: true, data: getBudget().getState() };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('budget:contributeGoal', (_event, { goalId, profileId, deltaAmount }) => {
+  try {
+    getBudget().contributeGoal(goalId, profileId, deltaAmount);
+    return { ok: true, data: getBudget().getState() };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('budget:deleteGoal', (_event, { goalId }) => {
+  try {
+    getBudget().deleteGoal(goalId);
+    return { ok: true, data: getBudget().getState() };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
 });
 
 app.on('before-quit', () => {

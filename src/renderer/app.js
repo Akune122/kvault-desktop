@@ -45,7 +45,18 @@ const state = {
   bwRevealPassword: false,
   qvQuery: '',
   qvSelectedIndex: 0,
-  latestUpdateUrl: ''
+  latestUpdateUrl: '',
+
+  // Budget & Dépenses Couple (v0.5.0)
+  budgetData: null,
+  budgetMonth: new Date().toISOString().slice(0, 7),
+  budgetActiveTab: 'overview',
+  budgetSearch: '',
+  budgetFilterPayer: 'all',
+  budgetFilterStatus: 'all',
+  budgetFilterCategory: 'all',
+  pendingExpenseReceipt: null,
+  quickSettleDraft: null
 };
 
 // ============================================================================
@@ -179,7 +190,11 @@ function hideAllFloatingModals() {
     'deleteModal',
     'newBwItemModal',
     'generatorModal',
-    'quickVaultModal'
+    'quickVaultModal',
+    'budgetExpenseModal',
+    'budgetRecurringModal',
+    'budgetSettleModal',
+    'budgetGoalModal'
   ].forEach((id) => document.getElementById(id)?.classList.add('hidden'));
 }
 
@@ -231,6 +246,7 @@ async function checkInitialAppLock() {
 async function startWorkspace() {
   await initConnectionAndLoad();
   await refreshBitwardenStatus(false);
+  await loadBudgetState();
   if (state.pendingQuickVaultAfterUnlock) {
     state.pendingQuickVaultAfterUnlock = false;
     openQuickVaultPalette();
@@ -238,12 +254,13 @@ async function startWorkspace() {
 }
 
 // ============================================================================
-// Navigation entre les vues (kDrive / Bitwarden / Paramètres)
+// Navigation entre les vues (kDrive / Budget Couple / Bitwarden / Paramètres)
 // ============================================================================
 function switchView(viewName) {
   state.currentView = viewName;
   hideContextMenu();
   document.getElementById('viewKdrive').classList.toggle('hidden', viewName !== 'kdrive');
+  document.getElementById('viewBudget').classList.toggle('hidden', viewName !== 'budget');
   document.getElementById('viewBitwarden').classList.toggle('hidden', viewName !== 'bitwarden');
   document.getElementById('viewSettings').classList.toggle('hidden', viewName !== 'settings');
 
@@ -258,6 +275,8 @@ function switchView(viewName) {
 
   if (viewName === 'bitwarden') {
     refreshBitwardenStatus(false);
+  } else if (viewName === 'budget') {
+    loadBudgetState();
   }
 }
 
@@ -1860,6 +1879,756 @@ async function refreshGeneratorPreview() {
 }
 
 // ============================================================================
+// MODULE BUDGET & DÉPENSES DE COUPLE (v0.5.0)
+// ============================================================================
+const BUDGET_CATEGORIES = {
+  groceries: { label: 'Courses & Supermarché', icon: '🛒' },
+  rent: { label: 'Loyer & Charges', icon: '🏠' },
+  bills: { label: 'Énergie, Internet & Abos', icon: '⚡' },
+  restaurant: { label: 'Sorties, Resto & Loisirs', icon: '🍽️' },
+  home: { label: 'Maison & Équipement', icon: '🛋️' },
+  vacation: { label: 'Vacances & Week-ends', icon: '✈️' },
+  other: { label: 'Autre dépense', icon: '📦' }
+};
+
+function formatCurrency(val) {
+  const num = Number(val) || 0;
+  return num.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+}
+
+function computeClientExpenseShares(expense, profiles) {
+  const amount = Math.max(0, Number(expense.amount) || 0);
+  const mode = expense.splitMode || 'equal';
+  const defPctA = Number(profiles?.A?.defaultSharePercent ?? 50);
+
+  let shareA = amount * 0.5;
+  let shareB = amount - shareA;
+
+  if (mode === 'equal') {
+    shareA = amount * 0.5;
+    shareB = amount - shareA;
+  } else if (mode === 'default') {
+    shareA = amount * (defPctA / 100);
+    shareB = amount - shareA;
+  } else if (mode === 'percent') {
+    const pctA = Math.min(100, Math.max(0, Number(expense.splitPercentA ?? defPctA))) / 100;
+    shareA = amount * pctA;
+    shareB = amount - shareA;
+  } else if (mode === 'exact') {
+    shareA = Math.min(amount, Math.max(0, Number(expense.exactShareA ?? amount / 2)));
+    shareB = Math.max(0, amount - shareA);
+  } else if (mode === 'full_A') {
+    shareA = amount;
+    shareB = 0;
+  } else if (mode === 'full_B') {
+    shareA = 0;
+    shareB = amount;
+  }
+
+  let paidA = 0;
+  let paidB = 0;
+  if (expense.paidBy === 'A') {
+    paidA = amount;
+  } else if (expense.paidBy === 'B') {
+    paidB = amount;
+  } else {
+    paidA = shareA;
+    paidB = shareB;
+  }
+
+  return {
+    amount,
+    shareA: Math.round(shareA * 100) / 100,
+    shareB: Math.round(shareB * 100) / 100,
+    paidA: Math.round(paidA * 100) / 100,
+    paidB: Math.round(paidB * 100) / 100,
+    // > 0 : B doit de l'argent à A ; < 0 : A doit de l'argent à B
+    netForA: Math.round((paidA - shareA) * 100) / 100
+  };
+}
+
+async function loadBudgetState() {
+  const res = await window.kvault.budgetGetState();
+  if (!res.ok) {
+    showToast(res.error || 'Erreur chargement budget.', true);
+    return;
+  }
+  state.budgetData = res.data;
+  renderBudgetAll();
+}
+
+function shiftBudgetMonth(deltaMonths) {
+  const [y, m] = state.budgetMonth.split('-').map(Number);
+  const d = new Date(y, m - 1 + deltaMonths, 1);
+  const nextY = d.getFullYear();
+  const nextM = String(d.getMonth() + 1).padStart(2, '0');
+  state.budgetMonth = `${nextY}-${nextM}`;
+  renderBudgetAll();
+}
+
+function switchBudgetTab(tabName) {
+  state.budgetActiveTab = tabName;
+  document.querySelectorAll('[data-budgettab]').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.budgettab === tabName);
+  });
+
+  document.getElementById('budgetTabOverview').classList.toggle('hidden', tabName !== 'overview');
+  document.getElementById('budgetTabCalendar').classList.toggle('hidden', tabName !== 'calendar');
+  document.getElementById('budgetTabGoals').classList.toggle('hidden', tabName !== 'goals');
+  document.getElementById('budgetTabProfiles').classList.toggle('hidden', tabName !== 'profiles');
+}
+
+function renderBudgetAll() {
+  const data = state.budgetData;
+  if (!data) return;
+
+  const profA = data.profiles?.A || { name: 'Loïc', emoji: '🧑🏻', defaultSharePercent: 50, monthlyIncome: 0 };
+  const profB = data.profiles?.B || { name: 'Ma Copine', emoji: '👩🏻', defaultSharePercent: 50, monthlyIncome: 0 };
+  const pctA = Number(profA.defaultSharePercent ?? 50);
+  const pctB = 100 - pctA;
+
+  document.getElementById('budgetMonthPicker').value = state.budgetMonth;
+  document.getElementById('budgetSidebarBadge').textContent = `${pctA}/${pctB}`;
+
+  // Mise à jour dynamique des libellés avec les prénoms des 2 profils
+  document.getElementById('kpiAvatarA').textContent = profA.emoji || '🧑🏻';
+  document.getElementById('kpiNameA').textContent = profA.name;
+  document.getElementById('kpiShareBadgeA').textContent = `Part par défaut : ${pctA}%`;
+
+  document.getElementById('kpiAvatarB').textContent = profB.emoji || '👩🏻';
+  document.getElementById('kpiNameB').textContent = profB.name;
+  document.getElementById('kpiShareBadgeB').textContent = `Part par défaut : ${pctB}%`;
+
+  document.getElementById('budgetFilterOptA').textContent = `Payé par ${profA.name}`;
+  document.getElementById('budgetFilterOptB').textContent = `Payé par ${profB.name}`;
+
+  document.getElementById('expPaidByOptA').textContent = `${profA.emoji} ${profA.name}`;
+  document.getElementById('expPaidByOptB').textContent = `${profB.emoji} ${profB.name}`;
+  document.getElementById('expSplitDefaultOpt').textContent = `💑 Ratio du couple (${pctA}% / ${pctB}%)`;
+  document.getElementById('expSplitFullBOpt').textContent = `➡️ 100% pour ${profB.name} (avance)`;
+  document.getElementById('expSplitFullAOpt').textContent = `⬅️ 100% pour ${profA.name} (avance)`;
+  document.getElementById('lblExpPercentA').textContent = `Part de ${profA.name} (%)`;
+  document.getElementById('lblExpExactA').textContent = `Montant pour ${profA.name} (€)`;
+
+  document.getElementById('recPaidByOptA').textContent = `${profA.emoji} ${profA.name}`;
+  document.getElementById('recPaidByOptB').textContent = `${profB.emoji} ${profB.name}`;
+
+  document.getElementById('settleOptBtoA').textContent = `${profB.emoji} ${profB.name} rembourse ${profA.emoji} ${profA.name}`;
+  document.getElementById('settleOptAtoB').textContent = `${profA.emoji} ${profA.name} rembourse ${profB.emoji} ${profB.name}`;
+
+  // Formulaire Profils
+  document.getElementById('inputProfileNameA').value = profA.name;
+  document.getElementById('inputProfileEmojiA').value = profA.emoji || '🧑🏻';
+  document.getElementById('inputProfileIncomeA').value = profA.monthlyIncome || '';
+  document.getElementById('inputProfileNameB').value = profB.name;
+  document.getElementById('inputProfileEmojiB').value = profB.emoji || '👩🏻';
+  document.getElementById('inputProfileIncomeB').value = profB.monthlyIncome || '';
+  document.getElementById('inputDefaultShareA').value = String(pctA);
+  updateProfileSliderLabels(pctA, profA.name, profB.name);
+
+  // Calculs financiers du mois sélectionné & solde global
+  const monthExpenses = (data.expenses || []).filter((e) => e.month === state.budgetMonth);
+  let monthPaidTotal = 0;
+  let monthPendingTotal = 0;
+  let monthPaidCount = 0;
+  let monthPaidByA = 0;
+  let monthPaidByB = 0;
+  let monthShouldPayA = 0;
+  let monthShouldPayB = 0;
+
+  for (const exp of monthExpenses) {
+    const calc = computeClientExpenseShares(exp, data.profiles);
+    if (exp.status === 'pending') {
+      monthPendingTotal += calc.amount;
+    } else {
+      monthPaidTotal += calc.amount;
+      monthPaidCount++;
+      monthPaidByA += calc.paidA;
+      monthPaidByB += calc.paidB;
+      monthShouldPayA += calc.shareA;
+      monthShouldPayB += calc.shareB;
+    }
+  }
+
+  // Solde global non soldé (toutes les dépenses payées - tous les remboursements enregistrés)
+  let globalNetForA = 0;
+  for (const exp of data.expenses || []) {
+    if (exp.status === 'paid') {
+      const calc = computeClientExpenseShares(exp, data.profiles);
+      globalNetForA += calc.netForA;
+    }
+  }
+  for (const st of data.settlements || []) {
+    const amt = Number(st.amount) || 0;
+    if (st.from === 'B' && st.to === 'A') {
+      // B a remboursé A -> réduit ce que B doit à A
+      globalNetForA -= amt;
+    } else if (st.from === 'A' && st.to === 'B') {
+      // A a remboursé B -> augmente le solde net en faveur de A
+      globalNetForA += amt;
+    }
+  }
+  globalNetForA = Math.round(globalNetForA * 100) / 100;
+
+  document.getElementById('kpiPaidA').textContent = formatCurrency(monthPaidByA);
+  document.getElementById('kpiShouldPayA').textContent = formatCurrency(monthShouldPayA);
+  document.getElementById('kpiPaidB').textContent = formatCurrency(monthPaidByB);
+  document.getElementById('kpiShouldPayB').textContent = formatCurrency(monthShouldPayB);
+  document.getElementById('kpiMonthTotal').textContent = formatCurrency(monthPaidTotal);
+  document.getElementById('kpiMonthPaidCount').textContent = `${monthPaidCount} payée(s)`;
+  document.getElementById('kpiMonthPendingAmount').textContent = formatCurrency(monthPendingTotal);
+
+  const headlineEl = document.getElementById('budgetBalanceHeadline');
+  const subEl = document.getElementById('budgetBalanceSub');
+  const quickSettleBtn = document.getElementById('btnQuickSettleBalance');
+
+  if (Math.abs(globalNetForA) < 0.05) {
+    state.quickSettleDraft = null;
+    headlineEl.textContent = '🎉 Vos comptes sont parfaitement équilibrés !';
+    subEl.textContent = 'Aucun remboursement en attente entre vous deux.';
+    quickSettleBtn.classList.add('hidden');
+    document.getElementById('budgetSidebarBadge').textContent = 'Équilibré ✓';
+  } else if (globalNetForA > 0) {
+    const owed = Math.abs(globalNetForA);
+    state.quickSettleDraft = { from: 'B', to: 'A', amount: owed };
+    headlineEl.textContent = `${profB.emoji} ${profB.name} doit ${formatCurrency(owed)} à ${profA.emoji} ${profA.name}`;
+    subEl.textContent = `Calculé automatiquement selon vos dépenses payées et vos règles de partage.`;
+    quickSettleBtn.textContent = `✅ Marquer les ${formatCurrency(owed)} comme remboursés`;
+    quickSettleBtn.classList.remove('hidden');
+    document.getElementById('budgetSidebarBadge').textContent = formatCurrency(owed);
+  } else {
+    const owed = Math.abs(globalNetForA);
+    state.quickSettleDraft = { from: 'A', to: 'B', amount: owed };
+    headlineEl.textContent = `${profA.emoji} ${profA.name} doit ${formatCurrency(owed)} à ${profB.emoji} ${profB.name}`;
+    subEl.textContent = `Calculé automatiquement selon vos dépenses payées et vos règles de partage.`;
+    quickSettleBtn.textContent = `✅ Marquer les ${formatCurrency(owed)} comme remboursés`;
+    quickSettleBtn.classList.remove('hidden');
+    document.getElementById('budgetSidebarBadge').textContent = formatCurrency(owed);
+  }
+
+  renderBudgetExpensesAndBreakdown(monthExpenses, data.profiles);
+  renderBudgetSettlements(data.settlements || [], data.profiles);
+  renderBudgetCalendarAndRecurring(data.recurring || [], monthExpenses, data.profiles);
+  renderBudgetGoals(data.goals || [], data.profiles);
+}
+
+function updateProfileSliderLabels(pctA, nameA, nameB) {
+  const a = Math.min(100, Math.max(0, Number(pctA) || 50));
+  const b = 100 - a;
+  document.getElementById('sliderLabelProfileA').textContent = `${nameA || 'Profil 1'} : ${a}%`;
+  document.getElementById('sliderLabelProfileB').textContent = `${nameB || 'Profil 2'} : ${b}%`;
+}
+
+function getSplitLabel(exp, profiles) {
+  const mode = exp.splitMode || 'equal';
+  if (mode === 'equal') return '50% / 50%';
+  if (mode === 'default') {
+    const a = Number(profiles?.A?.defaultSharePercent ?? 50);
+    return `${a}% / ${100 - a}%`;
+  }
+  if (mode === 'percent') {
+    const a = Number(exp.splitPercentA ?? 50);
+    return `${a}% / ${100 - a}%`;
+  }
+  if (mode === 'exact') return 'Montant exact';
+  if (mode === 'full_A') return `100% ${profiles?.A?.name || 'Profil 1'}`;
+  if (mode === 'full_B') return `100% ${profiles?.B?.name || 'Profil 2'}`;
+  return '50% / 50%';
+}
+
+function renderBudgetExpensesAndBreakdown(monthExpenses, profiles) {
+  const listEl = document.getElementById('budgetExpensesList');
+  listEl.innerHTML = '';
+
+  const q = state.budgetSearch.trim().toLowerCase();
+  const filtered = monthExpenses.filter((exp) => {
+    if (state.budgetFilterPayer !== 'all' && exp.paidBy !== state.budgetFilterPayer) return false;
+    if (state.budgetFilterStatus !== 'all' && exp.status !== state.budgetFilterStatus) return false;
+    if (state.budgetFilterCategory !== 'all' && exp.category !== state.budgetFilterCategory) return false;
+    if (q) {
+      const hay = `${exp.title} ${exp.notes || ''}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  document.getElementById('budgetExpensesCountLabel').textContent = `${filtered.length} dépense(s)`;
+
+  if (filtered.length === 0) {
+    listEl.innerHTML = `
+      <div class="state-box" style="padding: 28px">
+        <p>Aucune dépense enregistrée pour cette sélection sur le mois ${state.budgetMonth}.</p>
+      </div>`;
+  } else {
+    for (const exp of filtered) {
+      const cat = BUDGET_CATEGORIES[exp.category] || BUDGET_CATEGORIES.other;
+      const calc = computeClientExpenseShares(exp, profiles);
+      const payerName =
+        exp.paidBy === 'A'
+          ? `${profiles.A.emoji} Payé par ${profiles.A.name}`
+          : exp.paidBy === 'B'
+          ? `${profiles.B.emoji} Payé par ${profiles.B.name}`
+          : '👫 Payé à deux';
+
+      const row = document.createElement('div');
+      row.className = `expense-row ${exp.status === 'pending' ? 'pending-expense' : 'paid-expense'}`;
+
+      const left = document.createElement('div');
+      left.className = 'expense-left';
+
+      const iconBox = document.createElement('div');
+      iconBox.className = 'expense-cat-icon';
+      iconBox.textContent = cat.icon;
+
+      const meta = document.createElement('div');
+      meta.className = 'expense-meta';
+
+      const titleLine = document.createElement('div');
+      titleLine.className = 'expense-title-line';
+
+      const titleSpan = document.createElement('span');
+      titleSpan.className = 'expense-title';
+      titleSpan.textContent = exp.title;
+
+      const payerPill = document.createElement('span');
+      payerPill.className = 'expense-payer-pill';
+      payerPill.textContent = payerName;
+
+      const splitPill = document.createElement('span');
+      splitPill.className = 'expense-split-pill';
+      splitPill.textContent = getSplitLabel(exp, profiles);
+
+      const statusBtn = document.createElement('button');
+      statusBtn.type = 'button';
+      statusBtn.className = `expense-status-btn ${exp.status === 'pending' ? 'pending' : 'paid'}`;
+      statusBtn.title = 'Cliquez pour basculer entre Payé et À payer';
+      statusBtn.textContent = exp.status === 'pending' ? '⏳ À payer' : '✅ Payé';
+      statusBtn.addEventListener('click', async () => {
+        const nextStatus = exp.status === 'pending' ? 'paid' : 'pending';
+        const res = await window.kvault.budgetUpdateExpense(exp.id, { status: nextStatus });
+        if (res.ok) {
+          state.budgetData = res.data;
+          renderBudgetAll();
+          showToast(nextStatus === 'paid' ? `✅ "${exp.title}" pointé comme payé !` : `⏳ "${exp.title}" repassé en à payer.`);
+        }
+      });
+
+      titleLine.appendChild(titleSpan);
+      titleLine.appendChild(payerPill);
+      titleLine.appendChild(splitPill);
+      titleLine.appendChild(statusBtn);
+
+      const subLine = document.createElement('div');
+      subLine.className = 'expense-sub';
+      const dateFormatted = exp.date ? new Date(exp.date).toLocaleDateString('fr-FR') : '';
+      subLine.textContent = `${dateFormatted} • ${cat.label}${exp.notes ? ` — ${exp.notes}` : ''}`;
+
+      meta.appendChild(titleLine);
+      meta.appendChild(subLine);
+      left.appendChild(iconBox);
+      left.appendChild(meta);
+
+      const right = document.createElement('div');
+      right.className = 'expense-right';
+
+      const amountBox = document.createElement('div');
+      amountBox.className = 'expense-amount-box';
+      amountBox.innerHTML = `
+        <div class="expense-amount-val">${formatCurrency(calc.amount)}</div>
+        <div class="expense-shares-detail">${profiles.A.name}: ${formatCurrency(calc.shareA)} • ${profiles.B.name}: ${formatCurrency(calc.shareB)}</div>
+      `;
+
+      const receiptBtn = document.createElement('button');
+      receiptBtn.type = 'button';
+      receiptBtn.className = exp.receipt ? 'btn btn-accent-outline btn-sm' : 'icon-btn small';
+      receiptBtn.title = exp.receipt
+        ? `Voir le justificatif kDrive : ${exp.receipt.fileName}`
+        : 'Joindre une facture ou photo sur kDrive';
+      receiptBtn.textContent = exp.receipt ? '📎 Ticket' : '📎';
+      receiptBtn.addEventListener('click', async () => {
+        if (exp.receipt && exp.receipt.fileId) {
+          openUniversalPreview(
+            {
+              id: exp.receipt.fileId,
+              name: exp.receipt.fileName || 'Justificatif',
+              type: 'file',
+              mimeType: exp.receipt.mimeType || 'image/jpeg'
+            },
+            []
+          );
+        } else {
+          const up = await window.kvault.budgetUploadReceipt();
+          if (!up.ok) {
+            showToast(up.error, true);
+            return;
+          }
+          if (!up.canceled && up.receipt) {
+            const upd = await window.kvault.budgetUpdateExpense(exp.id, { receipt: up.receipt });
+            if (upd.ok) {
+              state.budgetData = upd.data;
+              renderBudgetAll();
+              showToast(`📎 Justificatif "${up.receipt.fileName}" sauvegardé sur kDrive !`);
+            }
+          }
+        }
+      });
+
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'icon-btn small danger';
+      delBtn.title = 'Supprimer cette dépense';
+      delBtn.textContent = '🗑️';
+      delBtn.addEventListener('click', async () => {
+        const res = await window.kvault.budgetDeleteExpense(exp.id);
+        if (res.ok) {
+          state.budgetData = res.data;
+          renderBudgetAll();
+          showToast(`🗑️ Dépense "${exp.title}" supprimée.`);
+        }
+      });
+
+      right.appendChild(amountBox);
+      right.appendChild(receiptBtn);
+      right.appendChild(delBtn);
+
+      row.appendChild(left);
+      row.appendChild(right);
+      listEl.appendChild(row);
+    }
+  }
+
+  // Répartition par catégorie
+  const catBox = document.getElementById('budgetCategoryBreakdown');
+  catBox.innerHTML = '';
+
+  const totalsByCat = {};
+  let grandTotal = 0;
+  for (const exp of monthExpenses) {
+    const amt = Number(exp.amount) || 0;
+    totalsByCat[exp.category] = (totalsByCat[exp.category] || 0) + amt;
+    grandTotal += amt;
+  }
+
+  const entries = Object.entries(totalsByCat).sort((a, b) => b[1] - a[1]);
+  if (entries.length === 0) {
+    catBox.innerHTML = '<p class="hint">Aucune dépense sur ce mois.</p>';
+  } else {
+    for (const [catKey, sum] of entries) {
+      const catInfo = BUDGET_CATEGORIES[catKey] || BUDGET_CATEGORIES.other;
+      const pct = grandTotal > 0 ? Math.round((sum / grandTotal) * 100) : 0;
+      const item = document.createElement('div');
+      item.className = 'cat-stat-row';
+      item.innerHTML = `
+        <div class="cat-stat-head">
+          <span>${catInfo.icon} ${catInfo.label}</span>
+          <strong>${formatCurrency(sum)} (${pct}%)</strong>
+        </div>
+        <div class="cat-stat-bar-bg">
+          <div class="cat-stat-bar-fill" style="width: ${pct}%"></div>
+        </div>
+      `;
+      catBox.appendChild(item);
+    }
+  }
+}
+
+function renderBudgetSettlements(settlements, profiles) {
+  const box = document.getElementById('budgetSettlementsList');
+  box.innerHTML = '';
+
+  if (!settlements.length) {
+    box.innerHTML = '<p class="hint">Aucun remboursement enregistré pour le moment.</p>';
+    return;
+  }
+
+  for (const st of settlements.slice(0, 12)) {
+    const fromP = st.from === 'B' ? profiles.B : profiles.A;
+    const toP = st.from === 'B' ? profiles.A : profiles.B;
+    const row = document.createElement('div');
+    row.className = 'expense-row';
+    row.style.padding = '9px 12px';
+
+    const info = document.createElement('div');
+    info.innerHTML = `
+      <div style="font-size:13px;font-weight:600">${fromP.emoji} ${fromP.name} ➔ ${toP.emoji} ${toP.name} : <strong>${formatCurrency(st.amount)}</strong></div>
+      <div class="hint">${st.date} • ${st.note || 'Remboursement'}</div>
+    `;
+
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'icon-btn small danger';
+    delBtn.textContent = '✕';
+    delBtn.title = 'Supprimer ce remboursement';
+    delBtn.addEventListener('click', async () => {
+      const res = await window.kvault.budgetDeleteSettlement(st.id);
+      if (res.ok) {
+        state.budgetData = res.data;
+        renderBudgetAll();
+      }
+    });
+
+    row.appendChild(info);
+    row.appendChild(delBtn);
+    box.appendChild(row);
+  }
+}
+
+function renderBudgetCalendarAndRecurring(recurringList, monthExpenses, profiles) {
+  const calGrid = document.getElementById('budgetCalendarGrid');
+  const recListEl = document.getElementById('budgetRecurringList');
+  calGrid.innerHTML = '';
+  recListEl.innerHTML = '';
+
+  const [year, month] = state.budgetMonth.split('-').map(Number);
+  const monthLabel = new Date(year, month - 1, 1).toLocaleDateString('fr-FR', {
+    month: 'long',
+    year: 'numeric'
+  });
+  document.getElementById('budgetCalendarTitle').textContent = `📅 Calendrier — ${monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1)}`;
+
+  const firstDay = new Date(year, month - 1, 1);
+  const daysInMonth = new Date(year, month, 0).getDate();
+  // Lundi = 0 ... Dimanche = 6
+  const startOffset = (firstDay.getDay() + 6) % 7;
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const currentDayNum = new Date().getDate();
+  const isCurrentMonth = state.budgetMonth === todayStr.slice(0, 7);
+
+  for (let i = 0; i < startOffset; i++) {
+    const empty = document.createElement('div');
+    empty.className = 'calendar-day-cell empty';
+    calGrid.appendChild(empty);
+  }
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateIso = `${state.budgetMonth}-${String(d).padStart(2, '0')}`;
+    const cell = document.createElement('div');
+    cell.className = `calendar-day-cell${dateIso === todayStr ? ' today' : ''}`;
+
+    const dayExps = monthExpenses.filter((e) => e.date === dateIso);
+    const daySum = dayExps.reduce((acc, e) => acc + (Number(e.amount) || 0), 0);
+
+    const head = document.createElement('div');
+    head.className = 'cal-day-num';
+    head.innerHTML = `<span>${d}</span>${daySum > 0 ? `<span class="cal-day-spend">${Math.round(daySum)}€</span>` : ''}`;
+    cell.appendChild(head);
+
+    // Échéances récurrentes tombant ce jour
+    const dueRecs = recurringList.filter((r) => Number(r.dayOfMonth) === d);
+    for (const rec of dueRecs) {
+      const paidExp = monthExpenses.find((e) => e.recurringId === rec.id && e.status === 'paid');
+      const isOverdue = !paidExp && isCurrentMonth && d < currentDayNum;
+
+      const chip = document.createElement('div');
+      chip.className = `cal-rec-chip ${paidExp ? 'paid' : isOverdue ? 'overdue' : 'due'}`;
+      chip.textContent = `${paidExp ? '✅' : isOverdue ? '⚠️' : '⏳'} ${rec.title} (${Math.round(rec.amount)}€)`;
+      chip.title = 'Cliquez pour pointer / dépointer ce paiement récurrent';
+      chip.addEventListener('click', async () => {
+        const res = await window.kvault.budgetToggleRecurringPaid(rec.id, state.budgetMonth);
+        if (res.ok) {
+          state.budgetData = res.data;
+          renderBudgetAll();
+          showToast(res.paid ? `✅ "${rec.title}" pointé comme payé pour ${state.budgetMonth} !` : `↩️ Pointage de "${rec.title}" annulé.`);
+        }
+      });
+      cell.appendChild(chip);
+    }
+
+    calGrid.appendChild(cell);
+  }
+
+  // Liste détaillée des charges fixes & paiements récurrents à droite
+  if (recurringList.length === 0) {
+    recListEl.innerHTML = `
+      <div class="state-box" style="padding:20px">
+        <p>Aucune charge fixe récurrente (Loyer, Internet, Élec...) configurée.</p>
+      </div>`;
+    return;
+  }
+
+  for (const rec of recurringList) {
+    const cat = BUDGET_CATEGORIES[rec.category] || BUDGET_CATEGORIES.rent;
+    const paidExp = monthExpenses.find((e) => e.recurringId === rec.id && e.status === 'paid');
+    const payerLabel =
+      rec.paidBy === 'A'
+        ? `${profiles.A.emoji} ${profiles.A.name}`
+        : rec.paidBy === 'B'
+        ? `${profiles.B.emoji} ${profiles.B.name}`
+        : '👫 Compte commun';
+
+    const row = document.createElement('div');
+    row.className = `expense-row ${paidExp ? 'paid-expense' : 'pending-expense'}`;
+
+    const left = document.createElement('div');
+    left.className = 'expense-left';
+    left.innerHTML = `
+      <div class="expense-cat-icon">${cat.icon}</div>
+      <div class="expense-meta">
+        <div class="expense-title-line">
+          <span class="expense-title">Le ${rec.dayOfMonth} du mois — ${rec.title}</span>
+          <span class="expense-payer-pill">${payerLabel}</span>
+        </div>
+        <div class="expense-sub">${formatCurrency(rec.amount)} / mois • ${getSplitLabel(rec, profiles)}${rec.notes ? ` • ${rec.notes}` : ''}</div>
+      </div>
+    `;
+
+    const right = document.createElement('div');
+    right.className = 'expense-right';
+
+    const toggleBtn = document.createElement('button');
+    toggleBtn.type = 'button';
+    toggleBtn.className = paidExp ? 'btn btn-secondary btn-sm' : 'btn btn-primary btn-sm';
+    toggleBtn.textContent = paidExp ? '✅ Payé ce mois' : 'Pointer payé';
+    toggleBtn.addEventListener('click', async () => {
+      const res = await window.kvault.budgetToggleRecurringPaid(rec.id, state.budgetMonth);
+      if (res.ok) {
+        state.budgetData = res.data;
+        renderBudgetAll();
+        showToast(res.paid ? `✅ "${rec.title}" pointé comme payé !` : `↩️ Pointage de "${rec.title}" annulé.`);
+      }
+    });
+
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'icon-btn small danger';
+    delBtn.textContent = '🗑️';
+    delBtn.title = 'Supprimer cette échéance récurrente';
+    delBtn.addEventListener('click', async () => {
+      const res = await window.kvault.budgetDeleteRecurring(rec.id);
+      if (res.ok) {
+        state.budgetData = res.data;
+        renderBudgetAll();
+        showToast(`🗑️ Échéance "${rec.title}" supprimée.`);
+      }
+    });
+
+    right.appendChild(toggleBtn);
+    right.appendChild(delBtn);
+
+    row.appendChild(left);
+    row.appendChild(right);
+    recListEl.appendChild(row);
+  }
+}
+
+function renderBudgetGoals(goals, profiles) {
+  const grid = document.getElementById('budgetGoalsGrid');
+  grid.innerHTML = '';
+
+  if (!goals.length) {
+    grid.innerHTML = `
+      <div class="state-box" style="padding:28px;grid-column:1/-1">
+        <p>Aucune cagnotte commune créée. Créez un projet à deux (ex: Vacances, Appartement, Cadeaux) pour suivre votre épargne !</p>
+      </div>`;
+    return;
+  }
+
+  for (const g of goals) {
+    const savedA = Number(g.savedA) || 0;
+    const savedB = Number(g.savedB) || 0;
+    const totalSaved = savedA + savedB;
+    const target = Math.max(1, Number(g.targetAmount) || 1);
+    const pctTotal = Math.min(100, Math.round((totalSaved / target) * 100));
+    const pctA = Math.min(100, (savedA / target) * 100);
+    const pctB = Math.min(100 - pctA, (savedB / target) * 100);
+
+    const card = document.createElement('div');
+    card.className = 'goal-card';
+
+    const head = document.createElement('div');
+    head.className = 'goal-card-head';
+    head.innerHTML = `
+      <div class="goal-title">${g.emoji || '🎯'} ${g.title}</div>
+      <span class="expense-split-pill">${pctTotal}%</span>
+    `;
+
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'icon-btn small danger';
+    delBtn.textContent = '🗑️';
+    delBtn.addEventListener('click', async () => {
+      const res = await window.kvault.budgetDeleteGoal(g.id);
+      if (res.ok) {
+        state.budgetData = res.data;
+        renderBudgetAll();
+      }
+    });
+    head.appendChild(delBtn);
+
+    const progressInfo = document.createElement('div');
+    progressInfo.innerHTML = `
+      <div class="kpi-stat-row">
+        <span>Épargné à deux : <strong>${formatCurrency(totalSaved)}</strong> / ${formatCurrency(target)}</span>
+        ${g.deadline ? `<span class="hint">Échéance : ${g.deadline}</span>` : ''}
+      </div>
+      <div class="goal-bar-bg" style="margin:8px 0">
+        <div class="goal-bar-a" style="width:${pctA}%"></div>
+        <div class="goal-bar-b" style="width:${pctB}%"></div>
+      </div>
+      <div class="kpi-stat-row">
+        <span>${profiles.A.emoji} ${profiles.A.name} : <strong>${formatCurrency(savedA)}</strong></span>
+        <span>${profiles.B.emoji} ${profiles.B.name} : <strong>${formatCurrency(savedB)}</strong></span>
+      </div>
+      ${g.notes ? `<div class="hint" style="margin-top:4px">${g.notes}</div>` : ''}
+    `;
+
+    const actions = document.createElement('div');
+    actions.className = 'goal-actions';
+
+    const btnAddA = document.createElement('button');
+    btnAddA.type = 'button';
+    btnAddA.className = 'btn btn-secondary btn-sm';
+    btnAddA.textContent = `+ 50 € (${profiles.A.name})`;
+    btnAddA.addEventListener('click', async () => {
+      const res = await window.kvault.budgetContributeGoal(g.id, 'A', 50);
+      if (res.ok) {
+        state.budgetData = res.data;
+        renderBudgetAll();
+        showToast(`🎯 +50 € ajoutés par ${profiles.A.name} !`);
+      }
+    });
+
+    const btnAddB = document.createElement('button');
+    btnAddB.type = 'button';
+    btnAddB.className = 'btn btn-secondary btn-sm';
+    btnAddB.textContent = `+ 50 € (${profiles.B.name})`;
+    btnAddB.addEventListener('click', async () => {
+      const res = await window.kvault.budgetContributeGoal(g.id, 'B', 50);
+      if (res.ok) {
+        state.budgetData = res.data;
+        renderBudgetAll();
+        showToast(`🎯 +50 € ajoutés par ${profiles.B.name} !`);
+      }
+    });
+
+    actions.appendChild(btnAddA);
+    actions.appendChild(btnAddB);
+
+    card.appendChild(head);
+    card.appendChild(progressInfo);
+    card.appendChild(actions);
+    grid.appendChild(card);
+  }
+}
+
+function updateExpenseModalLiveSplitPreview() {
+  const mode = document.getElementById('expSplitModeInput').value;
+  document.getElementById('expCustomPercentRow').classList.toggle('hidden', mode !== 'percent');
+  document.getElementById('expCustomExactRow').classList.toggle('hidden', mode !== 'exact');
+
+  const amount = Math.max(0, Number(document.getElementById('expAmountInput').value) || 0);
+  const pctA = Math.min(100, Math.max(0, Number(document.getElementById('expSplitPercentAInput').value) || 50));
+  const pctB = 100 - pctA;
+  document.getElementById('expSplitLivePreview').textContent =
+    `${pctA}% (${formatCurrency((amount * pctA) / 100)}) / ${pctB}% (${formatCurrency((amount * pctB) / 100)})`;
+
+  const exactA = Math.min(amount, Math.max(0, Number(document.getElementById('expExactShareAInput').value) || 0));
+  const exactB = Math.max(0, amount - exactA);
+  document.getElementById('expExactLivePreview').textContent = formatCurrency(exactB);
+}
+
+// ============================================================================
 // Événements DOM
 // ============================================================================
 document.addEventListener('DOMContentLoaded', () => {
@@ -2461,9 +3230,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (e.key === 'Escape') {
       hideContextMenu();
-      ['folderModal', 'renameModal', 'moveModal', 'shareModal', 'deleteModal', 'newBwItemModal', 'generatorModal'].forEach(
-        (id) => document.getElementById(id)?.classList.add('hidden')
-      );
+      [
+        'folderModal',
+        'renameModal',
+        'moveModal',
+        'shareModal',
+        'deleteModal',
+        'newBwItemModal',
+        'generatorModal',
+        'budgetExpenseModal',
+        'budgetRecurringModal',
+        'budgetSettleModal',
+        'budgetGoalModal'
+      ].forEach((id) => document.getElementById(id)?.classList.add('hidden'));
     }
   });
 
@@ -2805,6 +3584,299 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('uploadToastPercent').textContent = `${percent}%`;
     document.getElementById('uploadProgressFill').style.width = `${percent}%`;
     document.getElementById('uploadToastSub').textContent = fileName;
+  });
+
+  // ==========================================================================
+  // Événements MODULE BUDGET & DÉPENSES COUPLE (v0.5.0)
+  // ==========================================================================
+  document.getElementById('btnBudgetPrevMonth').addEventListener('click', () => shiftBudgetMonth(-1));
+  document.getElementById('btnBudgetNextMonth').addEventListener('click', () => shiftBudgetMonth(1));
+  document.getElementById('btnBudgetCurrentMonth').addEventListener('click', () => {
+    state.budgetMonth = new Date().toISOString().slice(0, 7);
+    renderBudgetAll();
+  });
+  document.getElementById('budgetMonthPicker').addEventListener('change', (e) => {
+    if (e.target.value) {
+      state.budgetMonth = e.target.value;
+      renderBudgetAll();
+    }
+  });
+
+  document.querySelectorAll('[data-budgettab]').forEach((btn) => {
+    btn.addEventListener('click', () => switchBudgetTab(btn.dataset.budgettab));
+  });
+
+  // Filtres Dépenses
+  document.getElementById('budgetSearchInput').addEventListener('input', (e) => {
+    state.budgetSearch = e.target.value;
+    renderBudgetAll();
+  });
+  document.getElementById('budgetFilterPayer').addEventListener('change', (e) => {
+    state.budgetFilterPayer = e.target.value;
+    renderBudgetAll();
+  });
+  document.getElementById('budgetFilterStatus').addEventListener('change', (e) => {
+    state.budgetFilterStatus = e.target.value;
+    renderBudgetAll();
+  });
+  document.getElementById('budgetFilterCategory').addEventListener('change', (e) => {
+    state.budgetFilterCategory = e.target.value;
+    renderBudgetAll();
+  });
+
+  // Bouton rapide "Marquer comme remboursé" dans la carte Équilibre
+  document.getElementById('btnQuickSettleBalance').addEventListener('click', async () => {
+    const draft = state.quickSettleDraft;
+    if (!draft) return;
+    const res = await window.kvault.budgetAddSettlement({
+      from: draft.from,
+      amount: draft.amount,
+      date: new Date().toISOString().slice(0, 10),
+      month: state.budgetMonth,
+      note: 'Remboursement d\'équilibrage en 1 clic',
+      markMonthSettled: true
+    });
+    if (res.ok) {
+      state.budgetData = res.data;
+      renderBudgetAll();
+      showToast('🎉 Comptes équilibrés et marqués comme remboursés !');
+    } else {
+      showToast(res.error, true);
+    }
+  });
+
+  // Modale 1 : Nouvelle Dépense Commune
+  const expModal = document.getElementById('budgetExpenseModal');
+  document.getElementById('btnOpenNewExpenseModal').addEventListener('click', () => {
+    document.getElementById('budgetExpenseForm').reset();
+    state.pendingExpenseReceipt = null;
+    document.getElementById('expAttachedReceiptLabel').textContent = 'Aucun justificatif joint';
+    const todayStr = new Date().toISOString().slice(0, 10);
+    document.getElementById('expDateInput').value = todayStr.startsWith(state.budgetMonth)
+      ? todayStr
+      : `${state.budgetMonth}-01`;
+    const defPct = state.budgetData?.profiles?.A?.defaultSharePercent ?? 50;
+    document.getElementById('expSplitPercentAInput').value = String(defPct);
+    updateExpenseModalLiveSplitPreview();
+    expModal.classList.remove('hidden');
+    document.getElementById('expTitleInput').focus();
+  });
+
+  document.getElementById('btnCancelExpenseModal').addEventListener('click', () => expModal.classList.add('hidden'));
+  ['expSplitModeInput', 'expAmountInput', 'expSplitPercentAInput', 'expExactShareAInput'].forEach((id) => {
+    document.getElementById(id).addEventListener('input', updateExpenseModalLiveSplitPreview);
+    document.getElementById(id).addEventListener('change', updateExpenseModalLiveSplitPreview);
+  });
+
+  document.getElementById('btnAttachExpenseReceipt').addEventListener('click', async () => {
+    const lbl = document.getElementById('expAttachedReceiptLabel');
+    lbl.textContent = '⏳ Téléversement sur kDrive (dossier Justificatifs Budget)...';
+    const res = await window.kvault.budgetUploadReceipt();
+    if (!res.ok) {
+      lbl.textContent = 'Aucun justificatif joint';
+      showToast(res.error, true);
+      return;
+    }
+    if (res.canceled) {
+      lbl.textContent = state.pendingExpenseReceipt ? `✅ ${state.pendingExpenseReceipt.fileName}` : 'Aucun justificatif joint';
+      return;
+    }
+    state.pendingExpenseReceipt = res.receipt;
+    lbl.textContent = `✅ Sauvegardé sur kDrive : ${res.receipt.fileName}`;
+    showToast(`📎 Justificatif "${res.receipt.fileName}" envoyé sur votre kDrive !`);
+  });
+
+  document.getElementById('budgetExpenseForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const payload = {
+      title: document.getElementById('expTitleInput').value.trim(),
+      amount: Number(document.getElementById('expAmountInput').value),
+      category: document.getElementById('expCategoryInput').value,
+      date: document.getElementById('expDateInput').value,
+      status: document.getElementById('expStatusInput').value,
+      paidBy: document.getElementById('expPaidByInput').value,
+      splitMode: document.getElementById('expSplitModeInput').value,
+      splitPercentA: Number(document.getElementById('expSplitPercentAInput').value),
+      exactShareA: Number(document.getElementById('expExactShareAInput').value),
+      notes: document.getElementById('expNotesInput').value.trim(),
+      receipt: state.pendingExpenseReceipt
+    };
+
+    const res = await window.kvault.budgetAddExpense(payload);
+    if (!res.ok) {
+      showToast(res.error, true);
+      return;
+    }
+    expModal.classList.add('hidden');
+    state.budgetData = res.data;
+    if (payload.date) {
+      state.budgetMonth = payload.date.slice(0, 7);
+    }
+    renderBudgetAll();
+    showToast(`🧾 Dépense "${payload.title}" ajoutée et calculée !`);
+  });
+
+  // Modale 2 : Nouveau Paiement Récurrent / Calendrier
+  const recModal = document.getElementById('budgetRecurringModal');
+  const openRecModal = () => {
+    document.getElementById('budgetRecurringForm').reset();
+    document.getElementById('recDayInput').value = '5';
+    recModal.classList.remove('hidden');
+    document.getElementById('recTitleInput').focus();
+  };
+  document.getElementById('btnOpenNewRecurringModal').addEventListener('click', openRecModal);
+  document.getElementById('btnAddRecurringFromTab').addEventListener('click', openRecModal);
+  document.getElementById('btnCancelRecurringModal').addEventListener('click', () => recModal.classList.add('hidden'));
+
+  document.getElementById('budgetRecurringForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const payload = {
+      title: document.getElementById('recTitleInput').value.trim(),
+      amount: Number(document.getElementById('recAmountInput').value),
+      dayOfMonth: Number(document.getElementById('recDayInput').value),
+      category: document.getElementById('recCategoryInput').value,
+      paidBy: document.getElementById('recPaidByInput').value,
+      splitMode: document.getElementById('recSplitModeInput').value,
+      notes: document.getElementById('recNotesInput').value.trim()
+    };
+
+    const res = await window.kvault.budgetAddRecurring(payload);
+    if (!res.ok) {
+      showToast(res.error, true);
+      return;
+    }
+    recModal.classList.add('hidden');
+    state.budgetData = res.data;
+    switchBudgetTab('calendar');
+    renderBudgetAll();
+    showToast(`📅 Échéance récurrente "${payload.title}" ajoutée au calendrier !`);
+  });
+
+  // Modale 3 : Enregistrer un remboursement
+  const settleModal = document.getElementById('budgetSettleModal');
+  document.getElementById('btnOpenSettleModal').addEventListener('click', () => {
+    document.getElementById('budgetSettleForm').reset();
+    document.getElementById('settleDateInput').value = new Date().toISOString().slice(0, 10);
+    if (state.quickSettleDraft) {
+      document.getElementById('settleDirectionSelect').value =
+        state.quickSettleDraft.from === 'B' ? 'B_to_A' : 'A_to_B';
+      document.getElementById('settleAmountInput').value = String(state.quickSettleDraft.amount);
+    }
+    settleModal.classList.remove('hidden');
+    document.getElementById('settleAmountInput').focus();
+  });
+  document.getElementById('btnCancelSettleModal').addEventListener('click', () => settleModal.classList.add('hidden'));
+
+  document.getElementById('budgetSettleForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const dir = document.getElementById('settleDirectionSelect').value;
+    const payload = {
+      from: dir === 'A_to_B' ? 'A' : 'B',
+      amount: Number(document.getElementById('settleAmountInput').value),
+      date: document.getElementById('settleDateInput').value,
+      month: state.budgetMonth,
+      note: document.getElementById('settleNoteInput').value.trim(),
+      markMonthSettled: true
+    };
+
+    const res = await window.kvault.budgetAddSettlement(payload);
+    if (!res.ok) {
+      showToast(res.error, true);
+      return;
+    }
+    settleModal.classList.add('hidden');
+    state.budgetData = res.data;
+    renderBudgetAll();
+    showToast('🤝 Remboursement enregistré avec succès !');
+  });
+
+  // Modale 4 : Nouvelle Cagnotte / Projet à deux
+  const goalModal = document.getElementById('budgetGoalModal');
+  document.getElementById('btnOpenNewGoalModal').addEventListener('click', () => {
+    document.getElementById('budgetGoalForm').reset();
+    document.getElementById('goalEmojiInput').value = '✈️';
+    goalModal.classList.remove('hidden');
+    document.getElementById('goalTitleInput').focus();
+  });
+  document.getElementById('btnCancelGoalModal').addEventListener('click', () => goalModal.classList.add('hidden'));
+
+  document.getElementById('budgetGoalForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const payload = {
+      title: document.getElementById('goalTitleInput').value.trim(),
+      emoji: document.getElementById('goalEmojiInput').value.trim() || '🎯',
+      targetAmount: Number(document.getElementById('goalTargetInput').value),
+      deadline: document.getElementById('goalDeadlineInput').value,
+      notes: document.getElementById('goalNotesInput').value.trim()
+    };
+
+    const res = await window.kvault.budgetAddGoal(payload);
+    if (!res.ok) {
+      showToast(res.error, true);
+      return;
+    }
+    goalModal.classList.add('hidden');
+    state.budgetData = res.data;
+    switchBudgetTab('goals');
+    renderBudgetAll();
+    showToast(`🎯 Cagnotte "${payload.title}" créée !`);
+  });
+
+  // Formulaire Profils & Règle de répartition
+  document.getElementById('inputDefaultShareA').addEventListener('input', (e) => {
+    updateProfileSliderLabels(
+      e.target.value,
+      document.getElementById('inputProfileNameA').value,
+      document.getElementById('inputProfileNameB').value
+    );
+  });
+
+  document.getElementById('btnResetEqualSplit').addEventListener('click', () => {
+    document.getElementById('inputDefaultShareA').value = '50';
+    updateProfileSliderLabels(
+      50,
+      document.getElementById('inputProfileNameA').value,
+      document.getElementById('inputProfileNameB').value
+    );
+  });
+
+  document.getElementById('btnCalcIncomeProrata').addEventListener('click', () => {
+    const incA = Math.max(0, Number(document.getElementById('inputProfileIncomeA').value) || 0);
+    const incB = Math.max(0, Number(document.getElementById('inputProfileIncomeB').value) || 0);
+    if (incA + incB <= 0) {
+      showToast('Renseignez vos 2 revenus mensuels pour calculer le prorata automatique.', true);
+      return;
+    }
+    const pctA = Math.round((incA / (incA + incB)) * 100);
+    document.getElementById('inputDefaultShareA').value = String(pctA);
+    updateProfileSliderLabels(
+      pctA,
+      document.getElementById('inputProfileNameA').value,
+      document.getElementById('inputProfileNameB').value
+    );
+    showToast(`⚖️ Prorata calculé : ${pctA}% / ${100 - pctA}%`);
+  });
+
+  document.getElementById('budgetProfilesForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const payload = {
+      nameA: document.getElementById('inputProfileNameA').value.trim(),
+      emojiA: document.getElementById('inputProfileEmojiA').value.trim() || '🧑🏻',
+      incomeA: Number(document.getElementById('inputProfileIncomeA').value) || 0,
+      nameB: document.getElementById('inputProfileNameB').value.trim(),
+      emojiB: document.getElementById('inputProfileEmojiB').value.trim() || '👩🏻',
+      incomeB: Number(document.getElementById('inputProfileIncomeB').value) || 0,
+      defaultSharePercentA: Number(document.getElementById('inputDefaultShareA').value)
+    };
+
+    const res = await window.kvault.budgetUpdateProfiles(payload);
+    if (!res.ok) {
+      showToast(res.error, true);
+      return;
+    }
+    state.budgetData = res.data;
+    renderBudgetAll();
+    showToast('💑 Profils et règle de répartition enregistrés !');
   });
 
   // Vérification du verrouillage au lancement
