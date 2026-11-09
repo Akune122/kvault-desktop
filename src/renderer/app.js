@@ -11,8 +11,21 @@ const state = {
   activeCategory: 'all',
   searchQuery: '',
   viewMode: 'grid',
+
+  // Actions contextuelles & Modales kDrive (v0.3.0)
+  contextItem: null,
   pendingDeleteItem: null,
+  pendingRenameItem: null,
+  pendingMoveItem: null,
+  moveStack: [],
+  pendingShareItem: null,
+
+  // Visionneuse multimédia universelle & Galerie (v0.3.0)
   previewItem: null,
+  previewList: [],
+  previewIndex: -1,
+  previewTextContent: '',
+  imageZoom: 1,
 
   // Bitwarden
   bwAuthMode: 'apikey',
@@ -25,7 +38,7 @@ const state = {
 };
 
 // ============================================================================
-// Helpers généraux
+// Helpers généraux & Détection des types multimédias
 // ============================================================================
 function formatBytes(bytes) {
   if (bytes === null || bytes === undefined || isNaN(bytes)) return '—';
@@ -49,25 +62,52 @@ function formatDate(ms) {
   }
 }
 
-function getFileCategory(item) {
-  if (item.type === 'dir') return 'dir';
-  const mime = (item.mimeType || '').toLowerCase();
-  const ext = (item.name.split('.').pop() || '').toLowerCase();
+function getFileExt(name) {
+  const parts = String(name || '').split('.');
+  return parts.length > 1 ? parts.pop().toLowerCase() : '';
+}
 
-  if (mime.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'heic'].includes(ext)) {
-    return 'images';
+function getPreviewKind(item) {
+  if (!item || item.type === 'dir') return null;
+  const mime = (item.mimeType || '').toLowerCase();
+  const ext = getFileExt(item.name);
+
+  if (mime.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'heic', 'avif'].includes(ext)) {
+    return 'image';
   }
-  if (mime.startsWith('video/') || mime.startsWith('audio/') || ['mp4', 'mov', 'mkv', 'mp3', 'wav', 'flac'].includes(ext)) {
-    return 'media';
+  if (mime.startsWith('video/') || ['mp4', 'm4v', 'webm', 'mov', 'mkv', 'ogv'].includes(ext)) {
+    return 'video';
+  }
+  if (mime.startsWith('audio/') || ['mp3', 'wav', 'flac', 'm4a', 'aac', 'ogg', 'opus'].includes(ext)) {
+    return 'audio';
+  }
+  if (mime === 'application/pdf' || ext === 'pdf') {
+    return 'pdf';
   }
   if (
-    mime.includes('pdf') ||
+    mime.startsWith('text/') ||
+    ['txt', 'md', 'json', 'csv', 'log', 'xml', 'yml', 'yaml', 'js', 'ts', 'py', 'html', 'css', 'sql', 'ini', 'conf', 'sh', 'ps1', 'bat'].includes(ext)
+  ) {
+    return 'text';
+  }
+  return null;
+}
+
+function getFileCategory(item) {
+  if (item.type === 'dir') return 'dir';
+  const kind = getPreviewKind(item);
+  if (kind === 'image') return 'images';
+  if (kind === 'video' || kind === 'audio') return 'media';
+  if (kind === 'pdf' || kind === 'text') return 'docs';
+
+  const mime = (item.mimeType || '').toLowerCase();
+  const ext = getFileExt(item.name);
+  if (
     mime.includes('word') ||
     mime.includes('sheet') ||
     mime.includes('excel') ||
     mime.includes('presentation') ||
-    mime.startsWith('text/') ||
-    ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'md', 'csv'].includes(ext)
+    ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods'].includes(ext)
   ) {
     return 'docs';
   }
@@ -76,13 +116,36 @@ function getFileCategory(item) {
 
 function getFileEmoji(item) {
   if (item.type === 'dir') return '📁';
-  const cat = getFileCategory(item);
-  if (cat === 'images') return '🖼️';
-  if (cat === 'media') return '🎬';
-  if (cat === 'docs') return '📄';
-  const ext = (item.name.split('.').pop() || '').toLowerCase();
+  const kind = getPreviewKind(item);
+  if (kind === 'image') return '🖼️';
+  if (kind === 'video') return '🎬';
+  if (kind === 'audio') return '🎵';
+  if (kind === 'pdf') return '📕';
+  if (kind === 'text') return '📝';
+  if (getFileCategory(item) === 'docs') return '📄';
+  const ext = getFileExt(item.name);
   if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return '🗜️';
   return '📦';
+}
+
+function buildThumbUrl(item, w = 380, h = 380) {
+  const params = new URLSearchParams({
+    id: String(item.id),
+    mime: String(item.mimeType || 'image/jpeg'),
+    ts: String(item.updatedAt || 0),
+    w: String(w),
+    h: String(h)
+  });
+  return `kdrive-media://local/thumb?${params.toString()}`;
+}
+
+function buildStreamUrl(item) {
+  const params = new URLSearchParams({
+    id: String(item.id),
+    mime: String(item.mimeType || 'application/octet-stream'),
+    name: String(item.name || 'file')
+  });
+  return `kdrive-media://local/stream?${params.toString()}`;
 }
 
 function showToast(message, isError = false) {
@@ -94,14 +157,30 @@ function showToast(message, isError = false) {
   setTimeout(() => el.remove(), 3800);
 }
 
+function hideAllFloatingModals() {
+  hideContextMenu();
+  closeUniversalPreview();
+  ['folderModal', 'renameModal', 'moveModal', 'shareModal', 'deleteModal', 'newBwItemModal', 'generatorModal'].forEach(
+    (id) => document.getElementById(id)?.classList.add('hidden')
+  );
+}
+
 // ============================================================================
-// Verrouillage de l'application (APP_LOCK_CODE, défaut : 0000)
+// Verrouillage de l'application (APP_LOCK_CODE + Auto-Lock Windows)
 // ============================================================================
-function applyLockScreenUI(unlocked, isDefaultCode) {
+function applyLockScreenUI(unlocked, isDefaultCode, reason = '') {
   state.appUnlocked = unlocked;
   document.getElementById('appLockOverlay').classList.toggle('hidden', unlocked);
   document.getElementById('btnLockAppTop').classList.toggle('hidden', !unlocked);
   document.getElementById('defaultCodeHint').classList.toggle('hidden', !isDefaultCode);
+
+  const subEl = document.getElementById('lockSubtitleText');
+  if (subEl) {
+    subEl.textContent =
+      reason === 'inactivity'
+        ? 'Session verrouillée automatiquement après une période d\'inactivité Windows.'
+        : 'Entrez votre code d\'accès ou mot de passe pour déverrouiller vos espaces.';
+  }
 
   const pill = document.getElementById('lockCodeStatusPill');
   if (pill) {
@@ -110,6 +189,12 @@ function applyLockScreenUI(unlocked, isDefaultCode) {
   }
 
   if (!unlocked) {
+    hideAllFloatingModals();
+    state.bwItems = [];
+    state.bwSelectedId = null;
+    if (state.bwStatus === 'unlocked') {
+      showBwPanelForStatus({ status: 'locked' });
+    }
     const inp = document.getElementById('appUnlockInput');
     inp.value = '';
     setTimeout(() => inp.focus(), 60);
@@ -134,6 +219,7 @@ async function startWorkspace() {
 // ============================================================================
 function switchView(viewName) {
   state.currentView = viewName;
+  hideContextMenu();
   document.getElementById('viewKdrive').classList.toggle('hidden', viewName !== 'kdrive');
   document.getElementById('viewBitwarden').classList.toggle('hidden', viewName !== 'bitwarden');
   document.getElementById('viewSettings').classList.toggle('hidden', viewName !== 'settings');
@@ -157,7 +243,7 @@ function switchView(viewName) {
 // ============================================================================
 async function populateSettingsForm() {
   const res = await window.kvault.getConfig();
-  document.getElementById('versionPill').textContent = `v${res.appVersion || '0.2.0'}`;
+  document.getElementById('versionPill').textContent = `v${res.appVersion || '0.3.0'}`;
   document.getElementById('envPathDisplay').textContent = res.envPath || '.env';
 
   const pill = document.getElementById('lockCodeStatusPill');
@@ -167,6 +253,19 @@ async function populateSettingsForm() {
   }
 
   const cfg = res.config || {};
+
+  // Intégration Windows Pro (v0.3.0)
+  const autoLockVal = String(cfg.AUTO_LOCK_MINUTES ?? '10');
+  const autoSelect = document.getElementById('inputAutoLockMinutes');
+  if ([...autoSelect.options].some((o) => o.value === autoLockVal)) {
+    autoSelect.value = autoLockVal;
+  } else {
+    autoSelect.value = '10';
+  }
+  document.getElementById('inputMinimizeToTray').checked =
+    String(cfg.MINIMIZE_TO_TRAY ?? 'true').toLowerCase() !== 'false';
+
+  // Connexion kDrive
   const modeSelect = document.getElementById('inputMode');
   modeSelect.value = cfg.KDRIVE_CONNECTION_MODE || 'api';
   document.getElementById('inputDriveId').value = cfg.KDRIVE_ID || '';
@@ -174,14 +273,13 @@ async function populateSettingsForm() {
   document.getElementById('inputEmail').value = cfg.KDRIVE_EMAIL || '';
   document.getElementById('inputAppPassword').value = cfg.KDRIVE_APP_PASSWORD || '';
 
-  // Champs Bitwarden dans Paramètres & pré-remplissage formulaire Bitwarden
+  // Champs Bitwarden
   const bwServer = cfg.BITWARDEN_SERVER_URL || 'https://vault.bitwarden.eu';
   document.getElementById('inputBwServer').value = bwServer;
   document.getElementById('inputBwEmail').value = cfg.BITWARDEN_EMAIL || '';
   document.getElementById('inputBwClientId').value = cfg.BITWARDEN_CLIENT_ID || '';
   document.getElementById('inputBwClientSecret').value = cfg.BITWARDEN_CLIENT_SECRET || '';
 
-  // Pré-remplissage de la carte de connexion Bitwarden
   const serverSel = document.getElementById('bwServerSelect');
   if (bwServer === 'https://vault.bitwarden.eu' || bwServer === 'https://vault.bitwarden.com') {
     serverSel.value = bwServer;
@@ -290,6 +388,7 @@ function showErrorBanner(msg) {
 }
 
 async function loadFolder(folderId) {
+  hideContextMenu();
   document.getElementById('onboardingCard').classList.add('hidden');
   document.getElementById('errorState').classList.add('hidden');
   document.getElementById('emptyState').classList.add('hidden');
@@ -337,12 +436,9 @@ function renderBreadcrumbs() {
   document.getElementById('btnBack').disabled = state.breadcrumbs.length <= 1;
 }
 
-function renderFiles() {
-  const container = document.getElementById('filesContainer');
-  container.innerHTML = '';
-
+function getVisibleFilteredItems() {
   const query = state.searchQuery.trim().toLowerCase();
-  const filtered = state.items.filter((item) => {
+  return state.items.filter((item) => {
     if (query && !item.name.toLowerCase().includes(query)) return false;
     if (state.activeCategory !== 'all') {
       if (item.type === 'dir') return true;
@@ -350,7 +446,16 @@ function renderFiles() {
     }
     return true;
   });
+}
 
+// ============================================================================
+// Affichage Grille & Liste avec Miniatures Photos Réelles (Pack 1)
+// ============================================================================
+function renderFiles() {
+  const container = document.getElementById('filesContainer');
+  container.innerHTML = '';
+
+  const filtered = getVisibleFilteredItems();
   if (filtered.length === 0) {
     document.getElementById('emptyState').classList.remove('hidden');
     return;
@@ -364,7 +469,45 @@ function renderFiles() {
 
     const iconBox = document.createElement('div');
     iconBox.className = 'file-icon-box';
-    iconBox.textContent = getFileEmoji(item);
+
+    const fallbackEmoji = document.createElement('span');
+    fallbackEmoji.className = 'file-emoji-fallback';
+    fallbackEmoji.textContent = getFileEmoji(item);
+    iconBox.appendChild(fallbackEmoji);
+
+    const previewKind = getPreviewKind(item);
+    const shouldLoadThumb = item.type === 'file' && (previewKind === 'image' || item.hasThumbnail);
+
+    if (shouldLoadThumb) {
+      const thumbImg = document.createElement('img');
+      thumbImg.className = 'file-thumb-img';
+      thumbImg.loading = 'lazy';
+      thumbImg.alt = item.name;
+      thumbImg.src = buildThumbUrl(item, 380, 380);
+      thumbImg.addEventListener('load', () => {
+        thumbImg.classList.add('loaded');
+        fallbackEmoji.style.display = 'none';
+      });
+      thumbImg.addEventListener('error', () => {
+        thumbImg.remove();
+      });
+      iconBox.appendChild(thumbImg);
+
+      if (previewKind === 'video') {
+        const playBadge = document.createElement('span');
+        playBadge.className = 'thumb-play-badge';
+        playBadge.textContent = '▶';
+        iconBox.appendChild(playBadge);
+      }
+    }
+
+    if (item.hasSharelink) {
+      const linkBadge = document.createElement('span');
+      linkBadge.className = 'share-link-badge';
+      linkBadge.title = 'Lien de partage public actif';
+      linkBadge.textContent = '🔗';
+      iconBox.appendChild(linkBadge);
+    }
 
     const meta = document.createElement('div');
     meta.className = 'file-meta';
@@ -395,18 +538,16 @@ function renderFiles() {
         enterFolder(item);
       });
       actions.appendChild(openBtn);
+    } else if (previewKind) {
+      const viewBtn = document.createElement('button');
+      viewBtn.className = 'mini-btn';
+      viewBtn.textContent = previewKind === 'video' || previewKind === 'audio' ? '▶ Lire' : '👁 Aperçu';
+      viewBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openUniversalPreview(item);
+      });
+      actions.appendChild(viewBtn);
     } else {
-      if (getFileCategory(item) === 'images') {
-        const viewBtn = document.createElement('button');
-        viewBtn.className = 'mini-btn';
-        viewBtn.textContent = '👁 Aperçu';
-        viewBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          openImagePreview(item);
-        });
-        actions.appendChild(viewBtn);
-      }
-
       const dlBtn = document.createElement('button');
       dlBtn.className = 'mini-btn';
       dlBtn.textContent = '⬇ Sauver';
@@ -417,27 +558,50 @@ function renderFiles() {
       actions.appendChild(dlBtn);
     }
 
-    const delBtn = document.createElement('button');
-    delBtn.className = 'mini-btn del';
-    delBtn.title = 'Mettre à la corbeille';
-    delBtn.textContent = '🗑';
-    delBtn.addEventListener('click', (e) => {
+    const shareBtn = document.createElement('button');
+    shareBtn.className = 'mini-btn icon-only';
+    shareBtn.title = 'Lien de partage public kDrive';
+    shareBtn.textContent = '🔗';
+    shareBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      askDeleteItem(item);
+      openShareModal(item);
     });
-    actions.appendChild(delBtn);
+    actions.appendChild(shareBtn);
+
+    const moreBtn = document.createElement('button');
+    moreBtn.className = 'mini-btn icon-only';
+    moreBtn.title = 'Plus d\'actions (Renommer, Déplacer, Supprimer...)';
+    moreBtn.textContent = '⋯';
+    moreBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const rect = moreBtn.getBoundingClientRect();
+      openFileContextMenu(rect.left, rect.bottom + 4, item);
+    });
+    actions.appendChild(moreBtn);
 
     card.appendChild(iconBox);
     card.appendChild(meta);
     card.appendChild(actions);
 
-    card.addEventListener('dblclick', () => {
-      if (item.type === 'dir') enterFolder(item);
-      else if (getFileCategory(item) === 'images') openImagePreview(item);
-      else handleDownload(item);
+    card.addEventListener('dblclick', () => openItemDefaultAction(item));
+    card.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openFileContextMenu(e.clientX, e.clientY, item);
     });
 
     container.appendChild(card);
+  }
+}
+
+function openItemDefaultAction(item) {
+  if (!item) return;
+  if (item.type === 'dir') {
+    enterFolder(item);
+  } else if (getPreviewKind(item)) {
+    openUniversalPreview(item);
+  } else {
+    handleDownload(item);
   }
 }
 
@@ -446,6 +610,306 @@ function enterFolder(folderItem) {
   loadFolder(folderItem.id);
 }
 
+// ============================================================================
+// Menu Contextuel Clic-Droit + Renommer + Déplacer + Lien Public (Pack 4)
+// ============================================================================
+function openFileContextMenu(x, y, item) {
+  state.contextItem = item;
+  const menu = document.getElementById('fileContextMenu');
+  document.getElementById('ctxDownload').classList.toggle('hidden', item.type === 'dir');
+  document.getElementById('ctxOpen').textContent =
+    item.type === 'dir' ? '📂 Ouvrir le dossier' : getPreviewKind(item) ? '👁 Ouvrir l\'aperçu' : '⬇️ Télécharger';
+
+  menu.classList.remove('hidden');
+  const menuWidth = 230;
+  const menuHeight = 250;
+  const posX = Math.max(10, Math.min(x, window.innerWidth - menuWidth));
+  const posY = Math.max(48, Math.min(y, window.innerHeight - menuHeight));
+  menu.style.left = `${posX}px`;
+  menu.style.top = `${posY}px`;
+}
+
+function hideContextMenu() {
+  document.getElementById('fileContextMenu')?.classList.add('hidden');
+}
+
+function openRenameModal(item) {
+  state.pendingRenameItem = item;
+  const modal = document.getElementById('renameModal');
+  const inp = document.getElementById('renameInput');
+  document.getElementById('renameModalSub').textContent = `Renommer "${item.name}" sur votre kDrive :`;
+  inp.value = item.name;
+  modal.classList.remove('hidden');
+  inp.focus();
+
+  const dotIdx = item.type === 'file' ? item.name.lastIndexOf('.') : -1;
+  if (dotIdx > 0) {
+    inp.setSelectionRange(0, dotIdx);
+  } else {
+    inp.select();
+  }
+}
+
+async function openMoveModal(item) {
+  state.pendingMoveItem = item;
+  const rootCrumbName = state.breadcrumbs[0]?.name || 'Mon kDrive';
+  state.moveStack = [{ id: state.rootId, name: rootCrumbName }];
+
+  document.getElementById('moveModalSub').textContent = `Choisissez où déplacer "${item.name}" :`;
+  document.getElementById('moveModal').classList.remove('hidden');
+  await refreshMoveModalFolders();
+}
+
+async function refreshMoveModalFolders() {
+  const listEl = document.getElementById('moveFolderList');
+  const current = state.moveStack[state.moveStack.length - 1];
+  document.getElementById('moveCurrentPathLabel').textContent =
+    state.moveStack.map((s, idx) => (idx === 0 ? `🏠 ${s.name}` : s.name)).join(' › ');
+  document.getElementById('btnMoveBack').disabled = state.moveStack.length <= 1;
+
+  listEl.innerHTML = '<div class="state-box" style="padding:24px"><div class="spinner"></div></div>';
+  const res = await window.kvault.listFiles(current.id);
+
+  if (!res.ok) {
+    listEl.innerHTML = `<div class="state-box" style="padding:20px"><p>${res.error}</p></div>`;
+    return;
+  }
+
+  const folders = (res.items || []).filter(
+    (it) => it.type === 'dir' && String(it.id) !== String(state.pendingMoveItem?.id)
+  );
+
+  listEl.innerHTML = '';
+  if (folders.length === 0) {
+    listEl.innerHTML = '<div class="state-box" style="padding:28px"><p>Aucun sous-dossier ici. Cliquez sur "Déplacer ici" pour valider cet emplacement.</p></div>';
+    return;
+  }
+
+  for (const dir of folders) {
+    const row = document.createElement('div');
+    row.className = 'move-folder-row';
+    row.innerHTML = `<span>📁 ${dir.name}</span><span class="hint">Ouvrir ›</span>`;
+    row.addEventListener('click', () => {
+      state.moveStack.push({ id: dir.id, name: dir.name });
+      refreshMoveModalFolders();
+    });
+    listEl.appendChild(row);
+  }
+}
+
+async function openShareModal(item) {
+  state.pendingShareItem = item;
+  showToast('🔗 Récupération du lien public kDrive...');
+  const res = await window.kvault.createShareLink(item.id);
+  if (!res.ok) {
+    showToast(res.error, true);
+    return;
+  }
+
+  item.hasSharelink = true;
+  renderFiles();
+
+  const urlInput = document.getElementById('shareUrlInput');
+  urlInput.value = res.url;
+  document.getElementById('shareModalSub').textContent = `Lien public pour "${item.name}" :`;
+  document.getElementById('shareModal').classList.remove('hidden');
+
+  await window.kvault.copyToClipboard(res.url, 0);
+  showToast('🔗 Lien public copié dans le presse-papiers !');
+}
+
+// ============================================================================
+// Visionneuse Multimédia Universelle & Galerie (Pack 1)
+// ============================================================================
+let previewRenderToken = 0;
+
+function stopActiveMediaPreview() {
+  previewRenderToken++;
+
+  const imgStage = document.getElementById('previewImageStage');
+  const videoEl = document.getElementById('previewVideoEl');
+  const audioCard = document.getElementById('previewAudioCard');
+  const audioEl = document.getElementById('previewAudioEl');
+  const pdfEl = document.getElementById('previewPdfFrame');
+  const codeBox = document.getElementById('previewCodeBox');
+  const imgEl = document.getElementById('previewImageEl');
+
+  if (imgEl) {
+    imgEl.onload = null;
+    imgEl.onerror = null;
+    imgEl.removeAttribute('src');
+    imgEl.style.transform = 'scale(1)';
+  }
+  if (videoEl) {
+    videoEl.pause();
+    videoEl.removeAttribute('src');
+    videoEl.load();
+  }
+  if (audioEl) {
+    audioEl.pause();
+    audioEl.removeAttribute('src');
+    audioEl.load();
+  }
+  if (pdfEl) {
+    pdfEl.src = 'about:blank';
+  }
+  if (codeBox) {
+    codeBox.textContent = '';
+  }
+
+  [imgStage, videoEl, audioCard, pdfEl, codeBox].forEach((el) => el?.classList.add('hidden'));
+
+  window.kvault.setMediaPlaying(false);
+}
+
+function closeUniversalPreview() {
+  stopActiveMediaPreview();
+  state.previewItem = null;
+  state.previewTextContent = '';
+  document.getElementById('previewModal')?.classList.add('hidden');
+}
+
+function applyImageZoom(newZoom) {
+  state.imageZoom = Math.min(4, Math.max(0.4, Math.round(newZoom * 100) / 100));
+  const imgEl = document.getElementById('previewImageEl');
+  const lbl = document.getElementById('btnZoomReset');
+  if (imgEl) imgEl.style.transform = `scale(${state.imageZoom})`;
+  if (lbl) lbl.textContent = `${Math.round(state.imageZoom * 100)}%`;
+}
+
+async function openUniversalPreview(item) {
+  const kind = getPreviewKind(item);
+  if (!kind) {
+    handleDownload(item);
+    return;
+  }
+
+  const candidates = getVisibleFilteredItems().filter((it) => it.type === 'file' && getPreviewKind(it) !== null);
+  state.previewList = candidates.length ? candidates : [item];
+  state.previewIndex = Math.max(
+    0,
+    state.previewList.findIndex((it) => String(it.id) === String(item.id))
+  );
+
+  await renderPreviewAtCurrentIndex();
+}
+
+async function navigatePreview(delta) {
+  if (!state.previewList.length) return;
+  const nextIdx = state.previewIndex + delta;
+  if (nextIdx < 0 || nextIdx >= state.previewList.length) return;
+  state.previewIndex = nextIdx;
+  await renderPreviewAtCurrentIndex();
+}
+
+async function renderPreviewAtCurrentIndex() {
+  const item = state.previewList[state.previewIndex];
+  if (!item) return;
+
+  stopActiveMediaPreview();
+  const currentToken = previewRenderToken;
+
+  state.previewItem = item;
+  state.previewTextContent = '';
+  state.imageZoom = 1;
+
+  const kind = getPreviewKind(item);
+  const modal = document.getElementById('previewModal');
+  const spinner = document.getElementById('previewSpinner');
+  const imgStage = document.getElementById('previewImageStage');
+  const imgEl = document.getElementById('previewImageEl');
+  const videoEl = document.getElementById('previewVideoEl');
+  const audioCard = document.getElementById('previewAudioCard');
+  const audioEl = document.getElementById('previewAudioEl');
+  const pdfFrame = document.getElementById('previewPdfFrame');
+  const codeBox = document.getElementById('previewCodeBox');
+
+  document.getElementById('previewTitle').textContent = item.name;
+  document.getElementById('previewCounter').textContent = `${state.previewIndex + 1} / ${state.previewList.length}`;
+  document.getElementById('btnPrevPreview').disabled = state.previewIndex <= 0;
+  document.getElementById('btnNextPreview').disabled = state.previewIndex >= state.previewList.length - 1;
+
+  document.getElementById('previewZoomBar').classList.toggle('hidden', kind !== 'image');
+  document.getElementById('btnCopyPreviewText').classList.add('hidden');
+  applyImageZoom(1);
+
+  [imgStage, videoEl, audioCard, pdfFrame, codeBox].forEach((el) => el.classList.add('hidden'));
+  spinner.classList.remove('hidden');
+  modal.classList.remove('hidden');
+
+  const ext = getFileExt(item.name);
+
+  if (kind === 'image') {
+    const primaryUrl = ext === 'heic' ? buildThumbUrl(item, 1600, 1600) : buildStreamUrl(item);
+    imgEl.onload = () => {
+      if (currentToken !== previewRenderToken) return;
+      spinner.classList.add('hidden');
+      imgStage.classList.remove('hidden');
+    };
+    imgEl.onerror = () => {
+      if (currentToken !== previewRenderToken) return;
+      const fallbackUrl = buildThumbUrl(item, 1600, 1600);
+      if (imgEl.src !== fallbackUrl) {
+        imgEl.src = fallbackUrl;
+      } else {
+        spinner.classList.add('hidden');
+        showToast('Impossible d\'afficher cet aperçu image.', true);
+      }
+    };
+    imgEl.src = primaryUrl;
+    return;
+  }
+
+  if (kind === 'video') {
+    spinner.classList.add('hidden');
+    videoEl.src = buildStreamUrl(item);
+    videoEl.classList.remove('hidden');
+    videoEl.play().catch(() => {});
+    return;
+  }
+
+  if (kind === 'audio') {
+    spinner.classList.add('hidden');
+    document.getElementById('previewAudioTitle').textContent = item.name;
+    audioEl.src = buildStreamUrl(item);
+    audioCard.classList.remove('hidden');
+    audioEl.play().catch(() => {});
+    return;
+  }
+
+  if (kind === 'pdf') {
+    spinner.classList.add('hidden');
+    pdfFrame.src = buildStreamUrl({ ...item, mimeType: 'application/pdf' });
+    pdfFrame.classList.remove('hidden');
+    return;
+  }
+
+  if (kind === 'text') {
+    const res = await window.kvault.readTextFile(item.id);
+    if (currentToken !== previewRenderToken) return;
+    spinner.classList.add('hidden');
+    if (!res.ok) {
+      showToast(res.error, true);
+      return;
+    }
+    let formatted = res.text || '';
+    if (ext === 'json') {
+      try {
+        formatted = JSON.stringify(JSON.parse(formatted), null, 2);
+      } catch (_) {
+        // Garde le texte brut
+      }
+    }
+    state.previewTextContent = formatted;
+    codeBox.textContent = res.truncated ? `${formatted}\n\n--- [Aperçu tronqué à 512 Ko] ---` : formatted;
+    codeBox.classList.remove('hidden');
+    document.getElementById('btnCopyPreviewText').classList.remove('hidden');
+  }
+}
+
+// ============================================================================
+// Uploads, Téléchargement & Suppression kDrive
+// ============================================================================
 async function handleUploadFiles(onlyImages = false) {
   if (!state.connected) {
     showToast('Connectez d\'abord votre compte kDrive dans Paramètres.', true);
@@ -495,31 +959,6 @@ async function handleDownload(item) {
   if (!res.canceled) {
     showToast(`✅ Enregistré sous : ${res.savedPath}`);
   }
-}
-
-async function openImagePreview(item) {
-  state.previewItem = item;
-  const modal = document.getElementById('previewModal');
-  const img = document.getElementById('previewImageEl');
-  const spinner = document.getElementById('previewSpinner');
-
-  document.getElementById('previewTitle').textContent = item.name;
-  img.classList.add('hidden');
-  img.src = '';
-  spinner.classList.remove('hidden');
-  modal.classList.remove('hidden');
-
-  const res = await window.kvault.previewImage(item.id, item.mimeType);
-  spinner.classList.add('hidden');
-
-  if (!res.ok) {
-    modal.classList.add('hidden');
-    showToast(res.error, true);
-    return;
-  }
-
-  img.src = res.dataUrl;
-  img.classList.remove('hidden');
 }
 
 function askDeleteItem(item) {
@@ -605,12 +1044,7 @@ function renderBwItemsList() {
     if (['login', 'note', 'card'].includes(state.bwFilter) && item.type !== state.bwFilter) return false;
 
     if (q) {
-      const hay = [
-        item.name,
-        item.login?.username,
-        ...(item.login?.uris || []),
-        item.notes
-      ]
+      const hay = [item.name, item.login?.username, ...(item.login?.uris || []), item.notes]
         .filter(Boolean)
         .join(' ')
         .toLowerCase();
@@ -673,7 +1107,7 @@ function renderBwItemsList() {
       btnPass.addEventListener('click', async (e) => {
         e.stopPropagation();
         await window.kvault.copyToClipboard(item.login.password, 20000);
-        showToast(`🔑 Mot de passe copié (purge auto dans 20s)`);
+        showToast('🔑 Mot de passe copié (purge auto dans 20s)');
       });
       quick.appendChild(btnPass);
     }
@@ -902,7 +1336,6 @@ function renderBwSelectedDetail() {
   }
 }
 
-// Générateur de mot de passe
 async function refreshGeneratorPreview() {
   const options = {
     length: Number(document.getElementById('genLengthRange').value) || 20,
@@ -928,10 +1361,15 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnMaximize').addEventListener('click', () => window.kvault.toggleMaximizeWindow());
   document.getElementById('btnClose').addEventListener('click', () => window.kvault.closeWindow());
 
+  // Écoute du verrouillage déclenché par le Main Process (Auto-lock ou System Tray)
+  window.kvault.onAppLocked(({ reason, isDefaultCode }) => {
+    applyLockScreenUI(false, isDefaultCode, reason);
+  });
+
   // Bouton Verrouiller l'application (Barre du haut)
   document.getElementById('btnLockAppTop').addEventListener('click', async () => {
     const info = await window.kvault.lockApp();
-    applyLockScreenUI(false, info.isDefaultCode);
+    applyLockScreenUI(false, info.isDefaultCode, 'manual');
     showToast('🔒 Application verrouillée.');
   });
 
@@ -967,6 +1405,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
     applyLockScreenUI(true, res.isDefaultCode);
     await startWorkspace();
+  });
+
+  // Fermeture globale du menu contextuel au clic ailleurs
+  document.addEventListener('click', () => hideContextMenu());
+  document.getElementById('viewKdrive').addEventListener('scroll', () => hideContextMenu());
+
+  // Actions du menu contextuel Clic-Droit (Pack 4)
+  document.getElementById('ctxOpen').addEventListener('click', () => {
+    const it = state.contextItem;
+    hideContextMenu();
+    if (it) openItemDefaultAction(it);
+  });
+  document.getElementById('ctxShare').addEventListener('click', () => {
+    const it = state.contextItem;
+    hideContextMenu();
+    if (it) openShareModal(it);
+  });
+  document.getElementById('ctxRename').addEventListener('click', () => {
+    const it = state.contextItem;
+    hideContextMenu();
+    if (it) openRenameModal(it);
+  });
+  document.getElementById('ctxMove').addEventListener('click', () => {
+    const it = state.contextItem;
+    hideContextMenu();
+    if (it) openMoveModal(it);
+  });
+  document.getElementById('ctxDownload').addEventListener('click', () => {
+    const it = state.contextItem;
+    hideContextMenu();
+    if (it && it.type === 'file') handleDownload(it);
+  });
+  document.getElementById('ctxDelete').addEventListener('click', () => {
+    const it = state.contextItem;
+    hideContextMenu();
+    if (it) askDeleteItem(it);
   });
 
   // Liens externes
@@ -1063,6 +1537,85 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Enter') document.getElementById('btnConfirmFolder').click();
   });
 
+  // Modale Renommer kDrive (v0.3.0)
+  const renameModal = document.getElementById('renameModal');
+  const renameInput = document.getElementById('renameInput');
+  document.getElementById('btnCancelRename').addEventListener('click', () => renameModal.classList.add('hidden'));
+  document.getElementById('btnConfirmRename').addEventListener('click', async () => {
+    const item = state.pendingRenameItem;
+    const newName = renameInput.value.trim();
+    if (!item || !newName || newName === item.name) {
+      renameModal.classList.add('hidden');
+      return;
+    }
+    renameModal.classList.add('hidden');
+    const res = await window.kvault.renameItem(item.id, newName);
+    if (!res.ok) {
+      showToast(res.error, true);
+      return;
+    }
+    showToast(`✏️ Renommé en "${newName}" !`);
+    await loadFolder(state.currentFolderId);
+  });
+  renameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('btnConfirmRename').click();
+  });
+
+  // Modale Déplacer vers... kDrive (v0.3.0)
+  const moveModal = document.getElementById('moveModal');
+  document.getElementById('btnCancelMove').addEventListener('click', () => moveModal.classList.add('hidden'));
+  document.getElementById('btnMoveBack').addEventListener('click', () => {
+    if (state.moveStack.length > 1) {
+      state.moveStack.pop();
+      refreshMoveModalFolders();
+    }
+  });
+  document.getElementById('btnConfirmMove').addEventListener('click', async () => {
+    const item = state.pendingMoveItem;
+    const dest = state.moveStack[state.moveStack.length - 1];
+    moveModal.classList.add('hidden');
+    if (!item || !dest) return;
+    if (String(dest.id) === String(state.currentFolderId)) {
+      showToast('Cet élément se trouve déjà dans ce dossier.');
+      return;
+    }
+    const res = await window.kvault.moveItem(item.id, dest.id);
+    if (!res.ok) {
+      showToast(res.error, true);
+      return;
+    }
+    showToast(`📂 "${item.name}" déplacé vers "${dest.name}" !`);
+    await loadFolder(state.currentFolderId);
+  });
+
+  // Modale Lien de partage public kDrive (v0.3.0)
+  const shareModal = document.getElementById('shareModal');
+  document.getElementById('btnCloseShareModal').addEventListener('click', () => shareModal.classList.add('hidden'));
+  document.getElementById('btnCopyShareUrl').addEventListener('click', async () => {
+    const url = document.getElementById('shareUrlInput').value;
+    if (url) {
+      await window.kvault.copyToClipboard(url, 0);
+      showToast('📋 Lien public copié !');
+    }
+  });
+  document.getElementById('btnOpenShareExternal').addEventListener('click', () => {
+    const url = document.getElementById('shareUrlInput').value;
+    if (url) window.kvault.openExternal(url);
+  });
+  document.getElementById('btnRevokeShareUrl').addEventListener('click', async () => {
+    const item = state.pendingShareItem;
+    if (!item) return;
+    const res = await window.kvault.revokeShareLink(item.id);
+    if (!res.ok) {
+      showToast(res.error, true);
+      return;
+    }
+    item.hasSharelink = false;
+    shareModal.classList.add('hidden');
+    renderFiles();
+    showToast('🚫 Lien de partage public désactivé.');
+  });
+
   // Modale Suppression kDrive
   const deleteModal = document.getElementById('deleteModal');
   document.getElementById('btnCancelDelete').addEventListener('click', () => deleteModal.classList.add('hidden'));
@@ -1079,12 +1632,76 @@ document.addEventListener('DOMContentLoaded', () => {
     await loadFolder(state.currentFolderId);
   });
 
-  // Modale Aperçu Image
-  document.getElementById('btnClosePreview').addEventListener('click', () => {
-    document.getElementById('previewModal').classList.add('hidden');
+  // Visionneuse Multimédia Universelle & Galerie (v0.3.0)
+  const videoEl = document.getElementById('previewVideoEl');
+  const audioEl = document.getElementById('previewAudioEl');
+  [videoEl, audioEl].forEach((media) => {
+    media.addEventListener('play', () => window.kvault.setMediaPlaying(true));
+    media.addEventListener('pause', () => window.kvault.setMediaPlaying(false));
+    media.addEventListener('ended', () => window.kvault.setMediaPlaying(false));
   });
+
+  document.getElementById('btnClosePreview').addEventListener('click', () => closeUniversalPreview());
   document.getElementById('btnDownloadPreview').addEventListener('click', () => {
     if (state.previewItem) handleDownload(state.previewItem);
+  });
+  document.getElementById('btnSharePreview').addEventListener('click', () => {
+    if (state.previewItem) openShareModal(state.previewItem);
+  });
+  document.getElementById('btnCopyPreviewText').addEventListener('click', async () => {
+    if (state.previewTextContent) {
+      await window.kvault.copyToClipboard(state.previewTextContent, 0);
+      showToast('📋 Contenu texte copié dans le presse-papiers !');
+    }
+  });
+
+  document.getElementById('btnPrevPreview').addEventListener('click', () => navigatePreview(-1));
+  document.getElementById('btnNextPreview').addEventListener('click', () => navigatePreview(1));
+  document.getElementById('btnZoomIn').addEventListener('click', () => applyImageZoom(state.imageZoom + 0.25));
+  document.getElementById('btnZoomOut').addEventListener('click', () => applyImageZoom(state.imageZoom - 0.25));
+  document.getElementById('btnZoomReset').addEventListener('click', () => applyImageZoom(1));
+
+  document.getElementById('previewImageStage').addEventListener(
+    'wheel',
+    (e) => {
+      if (document.getElementById('previewImageStage').classList.contains('hidden')) return;
+      e.preventDefault();
+      applyImageZoom(state.imageZoom + (e.deltaY < 0 ? 0.15 : -0.15));
+    },
+    { passive: false }
+  );
+
+  // Raccourcis clavier Galerie & Modales
+  document.addEventListener('keydown', (e) => {
+    if (!state.appUnlocked) return;
+
+    const previewOpen = !document.getElementById('previewModal').classList.contains('hidden');
+    if (previewOpen) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeUniversalPreview();
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        navigatePreview(-1);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        navigatePreview(1);
+      } else if (e.key === '+' || e.key === '=') {
+        applyImageZoom(state.imageZoom + 0.25);
+      } else if (e.key === '-') {
+        applyImageZoom(state.imageZoom - 0.25);
+      } else if (e.key === '0') {
+        applyImageZoom(1);
+      }
+      return;
+    }
+
+    if (e.key === 'Escape') {
+      hideContextMenu();
+      ['folderModal', 'renameModal', 'moveModal', 'shareModal', 'deleteModal', 'newBwItemModal', 'generatorModal'].forEach(
+        (id) => document.getElementById(id)?.classList.add('hidden')
+      );
+    }
   });
 
   // ==========================================================================
@@ -1283,7 +1900,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ==========================================================================
-  // Événements PARAMÈTRES & CODE D'ACCÈS
+  // Événements PARAMÈTRES, SÉCURITÉ & INTÉGRATION WINDOWS PRO
   // ==========================================================================
   document.getElementById('lockCodeForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -1307,10 +1924,25 @@ document.addEventListener('DOMContentLoaded', () => {
     showToast('🛡️ Code de verrouillage mis à jour avec succès !');
   });
 
+  document.getElementById('btnClearThumbCache').addEventListener('click', async () => {
+    const res = await window.kvault.clearThumbCache();
+    if (res.ok) {
+      showToast(`🧹 Cache des miniatures vidé (${res.removed || 0} élément(s)) !`);
+    } else {
+      showToast(res.error, true);
+    }
+  });
+
+  document.getElementById('btnQuitCompletely').addEventListener('click', () => {
+    window.kvault.quitAppNow();
+  });
+
   document.getElementById('inputMode').addEventListener('change', (e) => toggleModeInputs(e.target.value));
   document.getElementById('settingsForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const values = {
+      AUTO_LOCK_MINUTES: document.getElementById('inputAutoLockMinutes').value,
+      MINIMIZE_TO_TRAY: document.getElementById('inputMinimizeToTray').checked ? 'true' : 'false',
       KDRIVE_CONNECTION_MODE: document.getElementById('inputMode').value,
       KDRIVE_ID: document.getElementById('inputDriveId').value.trim(),
       KDRIVE_API_TOKEN: document.getElementById('inputApiToken').value.trim(),

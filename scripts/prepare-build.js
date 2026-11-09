@@ -5,8 +5,21 @@ const path = require('path');
 const WINCODESIGN_URL =
   'https://github.com/electron-userland/electron-builder-binaries/releases/download/winCodeSign-2.6.0/winCodeSign-2.6.0.7z';
 
+function closeRunningKVaultProcesses() {
+  const exeNames = ['KVault Desktop.exe', 'KVault-Desktop-0.3.0-Portable.exe', 'KVault-Desktop-0.2.0-Portable.exe'];
+  for (const name of exeNames) {
+    try {
+      execFileSync('taskkill', ['/F', '/IM', name, '/T'], { stdio: 'ignore' });
+    } catch (_) {
+      // Processus non actif
+    }
+  }
+}
+
 async function main() {
   if (process.platform !== 'win32') return;
+
+  closeRunningKVaultProcesses();
 
   const localAppData = process.env.LOCALAPPDATA;
   if (!localAppData) return;

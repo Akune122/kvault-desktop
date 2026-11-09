@@ -14,9 +14,15 @@ const MIME_MAP = {
   '.bmp': 'image/bmp',
   '.pdf': 'application/pdf',
   '.mp4': 'video/mp4',
+  '.m4v': 'video/mp4',
+  '.webm': 'video/webm',
   '.mov': 'video/quicktime',
   '.mkv': 'video/x-matroska',
   '.mp3': 'audio/mpeg',
+  '.m4a': 'audio/mp4',
+  '.aac': 'audio/aac',
+  '.ogg': 'audio/ogg',
+  '.flac': 'audio/flac',
   '.wav': 'audio/wav',
   '.zip': 'application/zip',
   '.rar': 'application/vnd.rar',
@@ -24,6 +30,16 @@ const MIME_MAP = {
   '.txt': 'text/plain',
   '.md': 'text/markdown',
   '.json': 'application/json',
+  '.csv': 'text/csv',
+  '.log': 'text/plain',
+  '.xml': 'application/xml',
+  '.yml': 'text/yaml',
+  '.yaml': 'text/yaml',
+  '.js': 'text/javascript',
+  '.ts': 'text/plain',
+  '.py': 'text/plain',
+  '.html': 'text/html',
+  '.css': 'text/css',
   '.doc': 'application/msword',
   '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   '.xls': 'application/vnd.ms-excel',
@@ -86,10 +102,10 @@ class KDriveApiClient {
         throw new Error(`Authentification refusée (401) : vérifiez votre KDRIVE_API_TOKEN et qu'il possède bien le scope "drive". (${apiErr})`);
       }
       if (res.status === 403) {
-        throw new Error(`Accès interdit (403) : votre Token API n'a pas la permission "drive" ou l'ID kDrive (${this.driveId}) ne correspond pas à votre compte.`);
+        throw new Error(`Accès interdit (403) : votre Token API n'a pas la permission nécessaire ou l'ID kDrive (${this.driveId}) est incorrect.`);
       }
       if (res.status === 404) {
-        throw new Error(`Ressource introuvable (404) : vérifiez que KDRIVE_ID=${this.driveId} est bien l'identifiant de votre kDrive.`);
+        throw new Error(`Ressource introuvable (404) : ${apiErr}`);
       }
       throw new Error(`Erreur API kDrive (${res.status}) : ${apiErr}`);
     }
@@ -99,7 +115,6 @@ class KDriveApiClient {
 
   async testConnection() {
     this.validateCredentials();
-    // Récupère les infos du Drive (nom, espace utilisé, quota total)
     let driveInfo = {
       id: this.driveId,
       name: `kDrive #${this.driveId}`,
@@ -116,14 +131,12 @@ class KDriveApiClient {
         driveInfo.totalSize = typeof infoRes.data.size === 'number' ? infoRes.data.size : null;
       }
     } catch (_) {
-      // Vérifie au minimum l'accès au dossier racine (ID = 1)
       const rootRes = await this.requestJson(`/3/drive/${this.driveId}/files/1`);
       if (rootRes?.data?.name) {
         driveInfo.name = `kDrive (${this.driveId})`;
       }
     }
 
-    // Valide également la lecture de la racine
     await this.listFiles('1');
     return driveInfo;
   }
@@ -139,6 +152,7 @@ class KDriveApiClient {
       mimeType: isDir ? 'inode/directory' : (item.mime_type || guessMimeType(item.name)),
       updatedAt: timestampSec ? timestampSec * 1000 : Date.now(),
       hasThumbnail: Boolean(item.has_thumbnail),
+      hasSharelink: Boolean(item.has_sharelink || item.sharelink),
       path: item.path || ''
     };
   }
@@ -149,15 +163,13 @@ class KDriveApiClient {
     let rawItems = [];
 
     try {
-      // API v3 avec pagination par curseur (récupère jusqu'à 500 éléments proprement)
       const res = await this.requestJson(
-        `/3/drive/${this.driveId}/files/${encodeURIComponent(targetId)}/files?limit=200`
+        `/3/drive/${this.driveId}/files/${encodeURIComponent(targetId)}/files?limit=250&with=sharelink`
       );
       rawItems = Array.isArray(res?.data) ? res.data : [];
-    } catch (errV3) {
-      // Fallback API v2 si nécessaire
+    } catch (_) {
       const resV2 = await this.requestJson(
-        `/2/drive/${this.driveId}/files/${encodeURIComponent(targetId)}/files?per_page=200`
+        `/2/drive/${this.driveId}/files/${encodeURIComponent(targetId)}/files?per_page=250`
       );
       rawItems = Array.isArray(resV2?.data) ? resV2.data : [];
     }
@@ -317,26 +329,211 @@ class KDriveApiClient {
     return { savedPath: destLocalPath };
   }
 
-  async getPreviewDataUrl(fileId, mimeType = 'image/jpeg') {
+  // ==========================================================================
+  // v0.3.0 : Miniatures, Streaming Vidéo/Audio/PDF, Aperçu Texte
+  // ==========================================================================
+  async getThumbnailBuffer(fileId, width = 420, height = 420, mimeType = 'image/jpeg') {
     this.validateCredentials();
     const urls = [
-      `${API_BASE}/2/drive/${this.driveId}/files/${encodeURIComponent(fileId)}/thumbnail?width=1280&height=1280`,
-      `${API_BASE}/2/drive/${this.driveId}/files/${encodeURIComponent(fileId)}/download`
+      `${API_BASE}/3/drive/${this.driveId}/files/${encodeURIComponent(fileId)}/thumbnail?width=${width}&height=${height}`,
+      `${API_BASE}/2/drive/${this.driveId}/files/${encodeURIComponent(fileId)}/thumbnail?width=${width}&height=${height}`
     ];
+
+    // Pour les petites images (ex: SVG, petites icônes sans thumbnail généré), fallback sur download si < 6 Mo
+    if (String(mimeType).startsWith('image/')) {
+      urls.push(`${API_BASE}/2/drive/${this.driveId}/files/${encodeURIComponent(fileId)}/download`);
+    }
 
     for (const url of urls) {
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${this.apiToken}` },
         redirect: 'follow'
       });
+
       if (res.ok) {
-        const contentType = res.headers.get('content-type') || mimeType;
-        const buf = Buffer.from(await res.arrayBuffer());
-        return `data:${contentType};base64,${buf.toString('base64')}`;
+        const lenHeader = Number(res.headers.get('content-length') || 0);
+        if (url.endsWith('/download') && lenHeader > 8 * 1024 * 1024) {
+          continue; // Évite de charger en miniature une image brute très lourde
+        }
+        const ct = res.headers.get('content-type') || mimeType || 'image/jpeg';
+        if (ct.includes('application/json')) {
+          continue;
+        }
+        const buffer = Buffer.from(await res.arrayBuffer());
+        if (buffer.length > 0) {
+          return { buffer, contentType: ct };
+        }
       }
     }
 
-    throw new Error('Aperçu indisponible pour ce fichier.');
+    throw new Error('Miniature indisponible');
+  }
+
+  async streamFile(fileId, rangeHeader = null) {
+    this.validateCredentials();
+    const headers = { Authorization: `Bearer ${this.apiToken}` };
+    if (rangeHeader) {
+      headers.Range = rangeHeader;
+    }
+
+    const endpoints = [
+      `${API_BASE}/2/drive/${this.driveId}/files/${encodeURIComponent(fileId)}/download`,
+      `${API_BASE}/3/drive/${this.driveId}/files/${encodeURIComponent(fileId)}/download`
+    ];
+
+    for (const url of endpoints) {
+      const res = await fetch(url, {
+        headers,
+        redirect: 'follow'
+      });
+      if (res.ok || res.status === 206) {
+        return res;
+      }
+    }
+
+    throw new Error('Flux média indisponible sur kDrive.');
+  }
+
+  async readTextPreview(fileId, maxBytes = 512 * 1024) {
+    const res = await this.streamFile(fileId, `bytes=0-${maxBytes - 1}`);
+    const buf = Buffer.from(await res.arrayBuffer());
+    const truncated = buf.length >= maxBytes;
+    return {
+      text: buf.toString('utf8'),
+      truncated
+    };
+  }
+
+  async getPreviewDataUrl(fileId, mimeType = 'image/jpeg') {
+    const { buffer, contentType } = await this.getThumbnailBuffer(fileId, 1600, 1600, mimeType);
+    return `data:${contentType};base64,${buffer.toString('base64')}`;
+  }
+
+  // ==========================================================================
+  // v0.3.0 : Renommer, Déplacer & Liens de partage public kDrive
+  // ==========================================================================
+  async renameItem(fileId, newName) {
+    this.validateCredentials();
+    const cleanName = String(newName || '').trim();
+    if (!cleanName) {
+      throw new Error('Le nouveau nom ne peut pas être vide.');
+    }
+
+    try {
+      const res = await this.requestJson(
+        `/3/drive/${this.driveId}/files/${encodeURIComponent(fileId)}/rename`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: cleanName })
+        }
+      );
+      return res?.data ? this.normalizeItem(res.data) : { id: fileId, name: cleanName };
+    } catch (_) {
+      const resV2 = await this.requestJson(
+        `/2/drive/${this.driveId}/files/${encodeURIComponent(fileId)}/rename`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: cleanName })
+        }
+      );
+      return resV2?.data ? this.normalizeItem(resV2.data) : { id: fileId, name: cleanName };
+    }
+  }
+
+  async moveItem(fileId, destinationFolderId) {
+    this.validateCredentials();
+    const destId = String(destinationFolderId || '1').trim();
+    if (String(fileId) === destId) {
+      throw new Error('Impossible de déplacer un dossier dans lui-même.');
+    }
+
+    try {
+      await this.requestJson(
+        `/3/drive/${this.driveId}/files/${encodeURIComponent(fileId)}/move/${encodeURIComponent(destId)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ conflict: 'rename' })
+        }
+      );
+    } catch (_) {
+      await this.requestJson(
+        `/2/drive/${this.driveId}/files/${encodeURIComponent(fileId)}/move/${encodeURIComponent(destId)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ conflict: 'rename' })
+        }
+      );
+    }
+    return { moved: true };
+  }
+
+  async createOrGetShareLink(fileId) {
+    this.validateCredentials();
+
+    // 1. Vérifie si un lien de partage existe déjà
+    for (const ver of ['2', '3']) {
+      try {
+        const existing = await this.requestJson(`/${ver}/drive/${this.driveId}/files/${encodeURIComponent(fileId)}/link`);
+        if (existing?.data?.url) {
+          return { url: existing.data.url, right: existing.data.right || 'public', existed: true };
+        }
+      } catch (_) {
+        // Pas encore de lien actif
+      }
+    }
+
+    // 2. Crée un lien de partage public en lecture + téléchargement autorisé
+    const body = JSON.stringify({
+      right: 'public',
+      can_download: true,
+      can_edit: false
+    });
+
+    try {
+      const created = await this.requestJson(
+        `/2/drive/${this.driveId}/files/${encodeURIComponent(fileId)}/link`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body
+        }
+      );
+      if (created?.data?.url) {
+        return { url: created.data.url, right: created.data.right || 'public', existed: false };
+      }
+    } catch (_) {
+      const createdV3 = await this.requestJson(
+        `/3/drive/${this.driveId}/files/${encodeURIComponent(fileId)}/link`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body
+        }
+      );
+      if (createdV3?.data?.url) {
+        return { url: createdV3.data.url, right: createdV3.data.right || 'public', existed: false };
+      }
+    }
+
+    throw new Error('Impossible de générer le lien de partage (vérifiez les droits de votre Token API).');
+  }
+
+  async revokeShareLink(fileId) {
+    this.validateCredentials();
+    try {
+      await this.requestJson(`/2/drive/${this.driveId}/files/${encodeURIComponent(fileId)}/link`, {
+        method: 'DELETE'
+      });
+    } catch (_) {
+      await this.requestJson(`/3/drive/${this.driveId}/files/${encodeURIComponent(fileId)}/link`, {
+        method: 'DELETE'
+      });
+    }
+    return { revoked: true };
   }
 
   async deleteItem(fileId) {

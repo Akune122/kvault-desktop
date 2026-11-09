@@ -3,7 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline';" />
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self' kdrive-media:; img-src 'self' data: blob: kdrive-media:; media-src 'self' blob: kdrive-media:; frame-src 'self' blob: kdrive-media:; object-src 'self' blob: kdrive-media:; style-src 'self' 'unsafe-inline';"
+  />
   <title>KVault Desktop</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -13,7 +16,7 @@
     <div class="titlebar-drag">
       <img src="../../assets/logo.svg" alt="KVault" class="titlebar-logo" />
       <span class="titlebar-title">KVault <span class="accent-text">Desktop</span></span>
-      <span class="version-pill" id="versionPill">v0.2.0</span>
+      <span class="version-pill" id="versionPill">v0.3.0</span>
       <div class="connection-badge disconnected" id="connectionBadge">
         <span class="status-dot"></span>
         <span id="connectionText">kDrive : Non connecté</span>
@@ -27,7 +30,7 @@
       <button class="lock-top-btn hidden" id="btnLockAppTop" title="Verrouiller l'application">🔒 Verrouiller</button>
       <button class="win-btn" id="btnMinimize" title="Réduire">&#x2013;</button>
       <button class="win-btn" id="btnMaximize" title="Agrandir">&#x25A1;</button>
-      <button class="win-btn win-close" id="btnClose" title="Fermer">&#x2715;</button>
+      <button class="win-btn win-close" id="btnClose" title="Fermer (ou réduire dans la barre Windows)">&#x2715;</button>
     </div>
   </header>
 
@@ -38,7 +41,7 @@
     <div class="lock-card">
       <img src="../../assets/logo.svg" alt="KVault" class="lock-logo" />
       <h2>KVault Desktop est verrouillé</h2>
-      <p class="lock-sub">Entrez votre code d'accès ou mot de passe pour déverrouiller vos espaces.</p>
+      <p class="lock-sub" id="lockSubtitleText">Entrez votre code d'accès ou mot de passe pour déverrouiller vos espaces.</p>
 
       <div class="default-code-hint" id="defaultCodeHint">
         💡 Code initial par défaut : <code>0000</code> <span>(modifiable dans ⚙️ Paramètres)</span>
@@ -83,11 +86,11 @@
         </button>
         <button class="nav-item" data-view="kdrive" data-filter="images">
           <span class="nav-icon">🖼️</span>
-          <span>Photos &amp; Images</span>
+          <span>Photos &amp; Galerie</span>
         </button>
         <button class="nav-item" data-view="kdrive" data-filter="docs">
           <span class="nav-icon">📄</span>
-          <span>Documents</span>
+          <span>Documents &amp; PDF</span>
         </button>
         <button class="nav-item" data-view="kdrive" data-filter="media">
           <span class="nav-icon">🎬</span>
@@ -100,7 +103,7 @@
         <button class="nav-item" data-view="bitwarden">
           <span class="nav-icon">🔐</span>
           <span>Coffre Bitwarden</span>
-          <span class="live-tag" id="bwSidebarBadge">v0.2</span>
+          <span class="live-tag" id="bwSidebarBadge">Fermé</span>
         </button>
       </div>
 
@@ -138,7 +141,7 @@
       </div>
 
       <!-- ================================================================ -->
-      <!-- VUE 1 : EXPLORATEUR KDRIVE                                       -->
+      <!-- VUE 1 : EXPLORATEUR KDRIVE & GALERIE MULTIMÉDIA                  -->
       <!-- ================================================================ -->
       <section class="view-panel" id="viewKdrive">
         <div class="toolbar">
@@ -155,8 +158,8 @@
             </div>
 
             <div class="view-switch">
-              <button class="switch-btn active" id="btnGridView" title="Vue Grille">⊞</button>
-              <button class="switch-btn" id="btnListView" title="Vue Liste">☰</button>
+              <button class="switch-btn active" id="btnGridView" title="Vue Grille & Miniatures">⊞</button>
+              <button class="switch-btn" id="btnListView" title="Vue Liste détaillée">☰</button>
             </div>
 
             <button class="btn btn-secondary" id="btnNewFolder" title="Créer un sous-dossier">+ Dossier</button>
@@ -218,7 +221,7 @@
       </section>
 
       <!-- ================================================================ -->
-      <!-- VUE 2 : COFFRE-FORT BITWARDEN / VAULTWARDEN (v0.2.0)             -->
+      <!-- VUE 2 : COFFRE-FORT BITWARDEN / VAULTWARDEN                      -->
       <!-- ================================================================ -->
       <section class="view-panel hidden" id="viewBitwarden">
         <!-- État chargement Bitwarden -->
@@ -362,7 +365,7 @@
       </section>
 
       <!-- ================================================================ -->
-      <!-- VUE 3 : PARAMÈTRES & SÉCURITÉ (.ENV + CODE D'ACCÈS)              -->
+      <!-- VUE 3 : PARAMÈTRES, SÉCURITÉ & INTÉGRATION WINDOWS PRO           -->
       <!-- ================================================================ -->
       <section class="view-panel hidden" id="viewSettings">
         <div class="settings-wrapper">
@@ -403,8 +406,40 @@
             </div>
           </form>
 
-          <!-- BLOC 2 : Connexion kDrive & Préférences Bitwarden -->
+          <!-- BLOC 2 : Intégration Windows Pro + Connexion kDrive & Bitwarden -->
           <form id="settingsForm" class="settings-card">
+            <div class="card-section-title">
+              <span>🖥️ Intégration Windows Pro &amp; Verrouillage Automatique</span>
+              <span class="live-tag">v0.3</span>
+            </div>
+
+            <div class="form-row">
+              <label for="inputAutoLockMinutes">Verrouillage automatique par inactivité (<code>AUTO_LOCK_MINUTES</code>)</label>
+              <select id="inputAutoLockMinutes">
+                <option value="0">Désactivé (ne jamais verrouiller automatiquement)</option>
+                <option value="2">Après 2 minutes d'inactivité</option>
+                <option value="5">Après 5 minutes d'inactivité</option>
+                <option value="10">Après 10 minutes d'inactivité (Recommandé)</option>
+                <option value="15">Après 15 minutes d'inactivité</option>
+                <option value="30">Après 30 minutes d'inactivité</option>
+              </select>
+              <small class="hint">
+                Verrouille automatiquement KVault Desktop et votre coffre Bitwarden lorsque Windows est inactif (suspendu automatiquement pendant la lecture d'une vidéo ou d'un fichier audio).
+              </small>
+            </div>
+
+            <label class="checkbox-row">
+              <input type="checkbox" id="inputMinimizeToTray" checked />
+              <span>Garder KVault actif dans la zone de notification Windows (System Tray près de l'horloge) en fermant la fenêtre (<code>MINIMIZE_TO_TRAY</code>)</span>
+            </label>
+
+            <div class="form-actions-inline">
+              <button type="button" class="btn btn-secondary" id="btnClearThumbCache">🧹 Vider le cache des miniatures</button>
+              <button type="button" class="btn btn-danger-outline" id="btnQuitCompletely">❌ Quitter complètement KVault</button>
+            </div>
+
+            <hr class="settings-divider" />
+
             <div class="card-section-title">
               <span>☁️ Connexion Infomaniak kDrive</span>
             </div>
@@ -486,6 +521,17 @@
     </main>
   </div>
 
+  <!-- Menu contextuel Clic-Droit kDrive (v0.3.0) -->
+  <div class="context-menu hidden" id="fileContextMenu">
+    <button type="button" class="ctx-item" id="ctxOpen">👁 Ouvrir / Aperçu</button>
+    <button type="button" class="ctx-item" id="ctxShare">🔗 Lien de partage public</button>
+    <button type="button" class="ctx-item" id="ctxRename">✏️ Renommer</button>
+    <button type="button" class="ctx-item" id="ctxMove">📂 Déplacer vers...</button>
+    <button type="button" class="ctx-item" id="ctxDownload">⬇️ Télécharger sur ce PC</button>
+    <div class="ctx-sep"></div>
+    <button type="button" class="ctx-item danger" id="ctxDelete">🗑️ Mettre à la corbeille</button>
+  </div>
+
   <!-- Barre flottante de progression d'Upload -->
   <div class="upload-toast hidden" id="uploadToast">
     <div class="upload-toast-top">
@@ -514,6 +560,55 @@
     </div>
   </div>
 
+  <!-- Modale : Renommer un fichier ou dossier kDrive (v0.3.0) -->
+  <div class="modal-backdrop hidden" id="renameModal">
+    <div class="modal-card">
+      <h3>✏️ Renommer l'élément</h3>
+      <p id="renameModalSub">Saisissez le nouveau nom sur votre kDrive.</p>
+      <input type="text" id="renameInput" placeholder="Nouveau nom..." />
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="btnCancelRename">Annuler</button>
+        <button class="btn btn-primary" id="btnConfirmRename">Renommer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modale : Déplacer vers un dossier kDrive (v0.3.0) -->
+  <div class="modal-backdrop hidden" id="moveModal">
+    <div class="modal-card modal-wide">
+      <h3>📂 Déplacer vers...</h3>
+      <p id="moveModalSub">Choisissez le dossier de destination sur votre kDrive :</p>
+      <div class="move-browser-header">
+        <button type="button" class="icon-btn" id="btnMoveBack" title="Dossier parent" disabled>⬅</button>
+        <span class="move-current-path" id="moveCurrentPathLabel">🏠 Mon kDrive</span>
+      </div>
+      <div class="move-folder-list" id="moveFolderList"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="btnCancelMove">Annuler</button>
+        <button type="button" class="btn btn-primary" id="btnConfirmMove">📂 Déplacer ici</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modale : Lien de partage public Infomaniak kDrive (v0.3.0) -->
+  <div class="modal-backdrop hidden" id="shareModal">
+    <div class="modal-card modal-wide">
+      <h3>🔗 Lien de partage public kDrive</h3>
+      <p id="shareModalSub">Toute personne disposant de ce lien peut consulter et télécharger cet élément.</p>
+      <div class="input-with-btn">
+        <input type="text" id="shareUrlInput" readonly class="selectable" />
+        <button type="button" class="btn btn-primary" id="btnCopyShareUrl">📋 Copier</button>
+      </div>
+      <div class="modal-actions share-modal-actions">
+        <button type="button" class="btn btn-danger-outline" id="btnRevokeShareUrl">🚫 Désactiver le lien</button>
+        <div class="share-modal-right">
+          <button type="button" class="btn btn-secondary" id="btnOpenShareExternal">🌐 Ouvrir</button>
+          <button type="button" class="btn btn-secondary" id="btnCloseShareModal">Fermer</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Modale : Confirmation de suppression kDrive -->
   <div class="modal-backdrop hidden" id="deleteModal">
     <div class="modal-card">
@@ -526,19 +621,61 @@
     </div>
   </div>
 
-  <!-- Modale : Aperçu Photo / Image (Lightbox) -->
+  <!-- ====================================================================== -->
+  <!-- VISIONNEUSE UNIVERSELLE MULTIMÉDIA & GALERIE (v0.3.0 — Pack 1)         -->
+  <!-- Photos (Zoom + Flèches) • Vidéo Streaming • Audio • PDF • Texte/Code  -->
+  <!-- ====================================================================== -->
   <div class="modal-backdrop hidden" id="previewModal">
     <div class="preview-dialog">
       <div class="preview-header">
-        <span id="previewTitle">Aperçu photo</span>
+        <div class="preview-title-wrap">
+          <span class="preview-counter" id="previewCounter">1 / 1</span>
+          <span class="preview-title-text" id="previewTitle">Aperçu</span>
+        </div>
+
         <div class="preview-actions">
-          <button class="btn btn-primary" id="btnDownloadPreview">⬇️ Télécharger</button>
-          <button class="btn btn-secondary" id="btnClosePreview">Fermer ✕</button>
+          <!-- Contrôles de zoom (Images) -->
+          <div class="zoom-controls hidden" id="previewZoomBar">
+            <button type="button" class="zoom-btn" id="btnZoomOut" title="Zoom arrière (-)">−</button>
+            <button type="button" class="zoom-btn zoom-label" id="btnZoomReset" title="Réinitialiser (100%)">100%</button>
+            <button type="button" class="zoom-btn" id="btnZoomIn" title="Zoom avant (+)">+</button>
+          </div>
+
+          <button type="button" class="btn btn-accent-outline hidden" id="btnCopyPreviewText">📋 Copier le texte</button>
+          <button type="button" class="btn btn-secondary" id="btnSharePreview" title="Créer ou copier un lien public">🔗 Partager</button>
+          <button type="button" class="btn btn-primary" id="btnDownloadPreview">⬇️ Télécharger</button>
+          <button type="button" class="btn btn-secondary" id="btnClosePreview">Fermer ✕</button>
         </div>
       </div>
-      <div class="preview-body">
-        <div class="spinner" id="previewSpinner"></div>
-        <img id="previewImageEl" alt="Aperçu" class="hidden" />
+
+      <div class="preview-body" id="previewStage">
+        <button type="button" class="gallery-nav-btn prev" id="btnPrevPreview" title="Précédent (←)">❮</button>
+
+        <div class="spinner hidden" id="previewSpinner"></div>
+
+        <!-- 1. Image -->
+        <div class="preview-image-stage hidden" id="previewImageStage">
+          <img id="previewImageEl" alt="Aperçu" />
+        </div>
+
+        <!-- 2. Vidéo Streaming -->
+        <video id="previewVideoEl" class="preview-video hidden" controls preload="metadata"></video>
+
+        <!-- 3. Audio Streaming -->
+        <div class="preview-audio-card hidden" id="previewAudioCard">
+          <div class="audio-disc">🎵</div>
+          <h4 id="previewAudioTitle">Lecture audio</h4>
+          <p class="hint">Streaming direct depuis Infomaniak kDrive</p>
+          <audio id="previewAudioEl" controls preload="metadata"></audio>
+        </div>
+
+        <!-- 4. Lecteur PDF natif -->
+        <iframe id="previewPdfFrame" class="preview-pdf-frame hidden" title="Lecteur PDF"></iframe>
+
+        <!-- 5. Lecteur Texte / Code / JSON / Markdown -->
+        <pre id="previewCodeBox" class="preview-code-box selectable hidden"></pre>
+
+        <button type="button" class="gallery-nav-btn next" id="btnNextPreview" title="Suivant (→)">❯</button>
       </div>
     </div>
   </div>

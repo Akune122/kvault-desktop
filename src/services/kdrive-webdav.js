@@ -52,8 +52,7 @@ class KDriveWebDavClient {
 
   normalizeDavPath(davPath = '/') {
     if (!davPath || davPath === '1' || davPath === '/') return '/';
-    let clean = davPath.startsWith('/') ? davPath : `/${davPath}`;
-    return clean;
+    return davPath.startsWith('/') ? davPath : `/${davPath}`;
   }
 
   encodeDavPath(davPath) {
@@ -87,7 +86,7 @@ class KDriveWebDavClient {
             if (res.statusCode === 401 || res.statusCode === 403) {
               reject(
                 new Error(
-                  `Accès WebDAV refusé (${res.statusCode}). Vérifiez votre email, votre mot de passe d'application, et que votre offre kDrive inclut WebDAV (sinon utilisez le mode API !).`
+                  `Accès WebDAV refusé (${res.statusCode}). Vérifiez votre email, votre mot de passe d'application, et votre offre kDrive.`
                 )
               );
               return;
@@ -158,9 +157,7 @@ class KDriveWebDavClient {
       }
 
       const trimmedHref = decodedHref.replace(/\/+$/, '') || '/';
-      if (trimmedHref === normalizedCurrent) {
-        continue; // Ignore le dossier courant lui-même
-      }
+      if (trimmedHref === normalizedCurrent) continue;
 
       const resTypeBlock = extractTag(block, 'resourcetype');
       const isDir = hasTag(resTypeBlock, 'collection') || decodedHref.endsWith('/');
@@ -177,7 +174,8 @@ class KDriveWebDavClient {
         size: isDir ? 0 : size,
         mimeType: isDir ? 'inode/directory' : contentType,
         updatedAt,
-        hasThumbnail: false,
+        hasThumbnail: contentType.startsWith('image/') && size < 8 * 1024 * 1024,
+        hasSharelink: false,
         path: trimmedHref
       });
     }
@@ -278,13 +276,88 @@ class KDriveWebDavClient {
     return { savedPath: destLocalPath };
   }
 
-  async getPreviewDataUrl(remoteFilePath, mimeType = 'image/jpeg') {
+  async getThumbnailBuffer(remoteFilePath, _w, _h, mimeType = 'image/jpeg') {
+    if (!String(mimeType).startsWith('image/')) {
+      throw new Error('Miniatures WebDAV disponibles uniquement pour les images.');
+    }
     const res = await this.requestRaw('GET', remoteFilePath);
     if (res.statusCode >= 400) {
-      throw new Error(`Aperçu indisponible (HTTP ${res.statusCode}).`);
+      throw new Error(`Miniature indisponible (HTTP ${res.statusCode}).`);
     }
-    const contentType = res.headers['content-type'] || mimeType;
-    return `data:${contentType};base64,${res.buffer.toString('base64')}`;
+    return {
+      buffer: res.buffer,
+      contentType: res.headers['content-type'] || mimeType
+    };
+  }
+
+  async streamFile(remoteFilePath, rangeHeader = null) {
+    this.validateCredentials();
+    const url = `https://${this.getBaseHost()}${this.encodeDavPath(remoteFilePath)}`;
+    const headers = { Authorization: this.getAuthHeader() };
+    if (rangeHeader) headers.Range = rangeHeader;
+
+    const res = await fetch(url, { headers, redirect: 'follow' });
+    if (!res.ok && res.status !== 206) {
+      throw new Error(`Flux WebDAV indisponible (HTTP ${res.status}).`);
+    }
+    return res;
+  }
+
+  async readTextPreview(remoteFilePath, maxBytes = 512 * 1024) {
+    const res = await this.streamFile(remoteFilePath, `bytes=0-${maxBytes - 1}`);
+    const buf = Buffer.from(await res.arrayBuffer());
+    return {
+      text: buf.toString('utf8'),
+      truncated: buf.length >= maxBytes
+    };
+  }
+
+  async getPreviewDataUrl(remoteFilePath, mimeType = 'image/jpeg') {
+    const { buffer, contentType } = await this.getThumbnailBuffer(remoteFilePath, 1600, 1600, mimeType);
+    return `data:${contentType};base64,${buffer.toString('base64')}`;
+  }
+
+  async renameItem(remoteFilePath, newName) {
+    const cleanName = String(newName || '').trim();
+    if (!cleanName) throw new Error('Le nouveau nom ne peut pas être vide.');
+    const parentDir = path.posix.dirname(this.normalizeDavPath(remoteFilePath));
+    const destPath = `${parentDir === '/' ? '' : parentDir}/${cleanName}`;
+    const destUrl = `https://${this.getBaseHost()}${this.encodeDavPath(destPath)}`;
+
+    const res = await this.requestRaw('MOVE', remoteFilePath, {
+      Destination: destUrl,
+      Overwrite: 'F'
+    });
+    if (res.statusCode >= 400) {
+      throw new Error(`Impossible de renommer en "${cleanName}" (HTTP ${res.statusCode}).`);
+    }
+    return { id: destPath, name: cleanName };
+  }
+
+  async moveItem(remoteFilePath, destinationFolderPath) {
+    const fileName = path.posix.basename(this.normalizeDavPath(remoteFilePath));
+    const baseDest = this.normalizeDavPath(destinationFolderPath).replace(/\/+$/, '');
+    const destPath = `${baseDest}/${fileName}`;
+    const destUrl = `https://${this.getBaseHost()}${this.encodeDavPath(destPath)}`;
+
+    const res = await this.requestRaw('MOVE', remoteFilePath, {
+      Destination: destUrl,
+      Overwrite: 'F'
+    });
+    if (res.statusCode >= 400) {
+      throw new Error(`Impossible de déplacer cet élément (HTTP ${res.statusCode}).`);
+    }
+    return { moved: true };
+  }
+
+  async createOrGetShareLink() {
+    throw new Error(
+      'Les liens de partage publics Infomaniak nécessitent le mode "API REST Officielle" (configurable dans Paramètres).'
+    );
+  }
+
+  async revokeShareLink() {
+    throw new Error('Mode API requis pour gérer les liens de partage.');
   }
 
   async deleteItem(remoteFilePath) {

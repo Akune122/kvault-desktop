@@ -1,7 +1,7 @@
 {
   "name": "kvault-desktop",
   "productName": "KVault Desktop",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Application Windows tout-en-un : Explorateur & Sauvegarde Cloud Infomaniak kDrive + Coffre-fort Bitwarden",
   "main": "src/main/main.js",
   "author": "Loïc Zaercher (Akune122)",

@@ -4,6 +4,8 @@ const dotenv = require('dotenv');
 
 const DEFAULT_CONFIG = {
   APP_LOCK_CODE: '0000',
+  AUTO_LOCK_MINUTES: '10',
+  MINIMIZE_TO_TRAY: 'true',
   KDRIVE_CONNECTION_MODE: 'api',
   KDRIVE_ID: '',
   KDRIVE_API_TOKEN: '',
@@ -16,11 +18,9 @@ const DEFAULT_CONFIG = {
 };
 
 function getProjectEnvPath(app) {
-  // Si lancé en exécutable portable (.exe), cherche un .env à côté du .exe
   if (process.env.PORTABLE_EXECUTABLE_DIR) {
     return path.join(process.env.PORTABLE_EXECUTABLE_DIR, '.env');
   }
-  // En mode développement / dossier projet
   if (!app.isPackaged) {
     return path.resolve(__dirname, '..', '..', '.env');
   }
@@ -49,7 +49,7 @@ function loadConfig(app) {
     }
   }
 
-  // 2. Si un fichier .env existe (projet dev ou à côté du .exe), ses valeurs non vides s'appliquent
+  // 2. Si un fichier .env existe, ses valeurs renseignées s'appliquent
   const envPath = getProjectEnvPath(app);
   if (fs.existsSync(envPath)) {
     try {
@@ -82,8 +82,10 @@ function writeEnvFile(targetEnvPath, updated) {
     '# KVAULT DESKTOP — VOS IDENTIFIANTS PERSONNELS (PROTÉGÉ PAR .gitignore)',
     '# ============================================================================',
     '',
-    '# 🛡️ Code de verrouillage au lancement de l\'application (par défaut : 0000)',
+    '# 🛡️ Sécurité & Intégration Windows',
     `APP_LOCK_CODE=${updated.APP_LOCK_CODE || '0000'}`,
+    `AUTO_LOCK_MINUTES=${updated.AUTO_LOCK_MINUTES ?? '10'}`,
+    `MINIMIZE_TO_TRAY=${updated.MINIMIZE_TO_TRAY || 'true'}`,
     '',
     '# ☁️ Mode de connexion kDrive : "api" (recommandé, toutes offres) ou "webdav"',
     `KDRIVE_CONNECTION_MODE=${updated.KDRIVE_CONNECTION_MODE || 'api'}`,
@@ -98,7 +100,7 @@ function writeEnvFile(targetEnvPath, updated) {
     `KDRIVE_EMAIL=${updated.KDRIVE_EMAIL || ''}`,
     `KDRIVE_APP_PASSWORD=${updated.KDRIVE_APP_PASSWORD || ''}`,
     '',
-    '# 🔐 Coffre-fort Bitwarden / Vaultwarden (v0.2.0)',
+    '# 🔐 Coffre-fort Bitwarden / Vaultwarden',
     `BITWARDEN_SERVER_URL=${updated.BITWARDEN_SERVER_URL || 'https://vault.bitwarden.eu'}`,
     `BITWARDEN_EMAIL=${updated.BITWARDEN_EMAIL || ''}`,
     `BITWARDEN_CLIENT_ID=${updated.BITWARDEN_CLIENT_ID || ''}`,
@@ -123,11 +125,9 @@ function saveConfig(app, newValues) {
     updated.APP_LOCK_CODE = '0000';
   }
 
-  // 1. Sauvegarde systématique dans userData (garantit le fonctionnement autonome du .exe)
   fs.mkdirSync(path.dirname(jsonPath), { recursive: true });
   fs.writeFileSync(jsonPath, JSON.stringify(updated, null, 2), 'utf8');
 
-  // 2. Synchronise le fichier .env s'il existe déjà ou si on est en mode développement
   if (!app.isPackaged || hasEnvFile) {
     try {
       writeEnvFile(envPath, updated);
