@@ -55,6 +55,8 @@ contextBridge.exposeInMainWorld('kvault', {
   downloadFile: (fileId, fileName) => ipcRenderer.invoke('kdrive:download', { fileId, fileName }),
   previewImage: (fileId, mimeType) => ipcRenderer.invoke('kdrive:previewImage', { fileId, mimeType }),
   readTextFile: (fileId) => ipcRenderer.invoke('kdrive:readText', { fileId }),
+  saveTextFile: (parentId, fileId, fileName, content) =>
+    ipcRenderer.invoke('kdrive:saveTextFile', { parentId, fileId, fileName, content }),
   renameItem: (fileId, newName) => ipcRenderer.invoke('kdrive:rename', { fileId, newName }),
   moveItem: (fileId, destinationFolderId) => ipcRenderer.invoke('kdrive:move', { fileId, destinationFolderId }),
   createShareLink: (fileId) => ipcRenderer.invoke('kdrive:shareLink', { fileId }),
@@ -99,11 +101,20 @@ contextBridge.exposeInMainWorld('kvault', {
   budgetAddSettlement: (payload) => ipcRenderer.invoke('budget:addSettlement', payload),
   budgetDeleteSettlement: (id) => ipcRenderer.invoke('budget:deleteSettlement', { id }),
   budgetAddRecurring: (payload) => ipcRenderer.invoke('budget:addRecurring', payload),
+  budgetUpdateRecurring: (id, patch) => ipcRenderer.invoke('budget:updateRecurring', { id, patch }),
   budgetDeleteRecurring: (id) => ipcRenderer.invoke('budget:deleteRecurring', { id }),
   budgetToggleRecurringPaid: (recurringId, month) =>
     ipcRenderer.invoke('budget:toggleRecurringPaid', { recurringId, month }),
   budgetAddGoal: (payload) => ipcRenderer.invoke('budget:addGoal', payload),
   budgetContributeGoal: (goalId, profileId, deltaAmount) =>
     ipcRenderer.invoke('budget:contributeGoal', { goalId, profileId, deltaAmount }),
-  budgetDeleteGoal: (goalId) => ipcRenderer.invoke('budget:deleteGoal', { goalId })
+  budgetDeleteGoal: (goalId) => ipcRenderer.invoke('budget:deleteGoal', { goalId }),
+  budgetAddShoppingItem: (payload) => ipcRenderer.invoke('budget:addShoppingItem', payload),
+  budgetToggleShoppingItem: (id) => ipcRenderer.invoke('budget:toggleShoppingItem', { id }),
+  budgetDeleteShoppingItem: (id) => ipcRenderer.invoke('budget:deleteShoppingItem', { id }),
+  budgetClearCheckedShopping: () => ipcRenderer.invoke('budget:clearCheckedShopping'),
+  budgetSetCloudSync: (enabled) => ipcRenderer.invoke('budget:setCloudSync', { enabled }),
+  budgetSyncKDrive: (pushOnly = false) => ipcRenderer.invoke('budget:syncKDrive', { pushOnly }),
+  budgetExportCsv: (month = null) => ipcRenderer.invoke('budget:exportCsv', { month }),
+  budgetExportReport: (month = null) => ipcRenderer.invoke('budget:exportReport', { month })
 });

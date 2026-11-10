@@ -2827,3 +2827,200 @@ kbd {
   flex-wrap: wrap;
 }
 
+/* ========================================================================== */
+/* v0.6.0 — PACK 1 (LISTE DE COURSES & BILAN GRAPHIQUE) + PACK 3 (ÉDITEUR)    */
+/* ========================================================================== */
+.shopping-top-btns {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.shopping-quick-form {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1.2fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+@media (max-width: 1050px) {
+  .shopping-quick-form {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.shopping-quick-form input,
+.shopping-quick-form select {
+  height: 36px;
+  padding: 0 11px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-main);
+  font-size: 13px;
+}
+
+.shopping-summary-strip {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--cyan);
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(0, 152, 255, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+}
+
+.shopping-row.checked-item .expense-title {
+  text-decoration: line-through;
+  color: var(--text-dim);
+}
+
+/* Histogramme 12 mois Bilan & Stats */
+.monthly-bar-chart {
+  height: 240px;
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 8px;
+  align-items: end;
+  padding: 18px 8px 6px;
+  background: rgba(7, 11, 20, 0.55);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.mbar-col {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.mbar-val {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.mbar-stack {
+  width: 100%;
+  max-width: 34px;
+  border-radius: 6px 6px 3px 3px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column-reverse;
+  background: rgba(255, 255, 255, 0.05);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.mbar-col:hover .mbar-stack,
+.mbar-col.active-month .mbar-stack {
+  transform: translateY(-2px);
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.35);
+  outline: 1px solid var(--cyan);
+}
+
+.mbar-seg-a {
+  background: linear-gradient(180deg, #38bdf8, #0098ff);
+  width: 100%;
+}
+
+.mbar-seg-b {
+  background: linear-gradient(180deg, #f472b6, #ec4899);
+  width: 100%;
+}
+
+.mbar-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.mbar-col.active-month .mbar-label {
+  color: var(--cyan);
+}
+
+/* Éditeur Cloud Direct & Aperçu Markdown (Pack 3) */
+.preview-editor-textarea {
+  width: min(980px, 90%);
+  height: 82%;
+  padding: 18px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-accent);
+  background: #070b14;
+  color: #e2e8f0;
+  font-family: Consolas, 'Cascadia Code', monospace;
+  font-size: 13.5px;
+  line-height: 1.55;
+  resize: none;
+  outline: none;
+}
+
+.preview-markdown-box {
+  width: min(980px, 90%);
+  height: 82%;
+  overflow-y: auto;
+  padding: 24px 28px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: rgba(13, 20, 36, 0.94);
+  color: var(--text-main);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.preview-markdown-box h1,
+.preview-markdown-box h2,
+.preview-markdown-box h3 {
+  color: #fff;
+  margin: 12px 0 8px;
+}
+
+.preview-markdown-box ul {
+  padding-left: 20px;
+  margin: 8px 0;
+}
+
+.preview-markdown-box pre {
+  background: #070b14;
+  border: 1px solid var(--border);
+  padding: 10px 12px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 10px 0;
+}
+
+.note-editor-dialog {
+  max-width: 760px;
+  width: 92%;
+}
+
+.md-toolbar {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.note-modal-textarea {
+  font-family: Consolas, 'Cascadia Code', monospace;
+  font-size: 13.5px;
+  line-height: 1.5;
+  background: #070b14;
+  color: var(--text-main);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  width: 100%;
+  resize: vertical;
+}
+
+.note-modal-preview {
+  width: 100%;
+  height: 250px;
+  padding: 14px 18px;
+}
+
+

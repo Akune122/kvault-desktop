@@ -668,6 +668,79 @@ class KDriveApiClient {
     }
     return { emptied: true };
   }
+
+  /**
+   * Envoie ou met à jour directement un Buffer en mémoire (ex: note Markdown, code, fichier JSON de budget)
+   */
+  async uploadBuffer(parentFolderId = 1, fileName = 'note.md', contentBuffer = Buffer.alloc(0), existingFileId = null) {
+    this.validateCredentials();
+    const buf = Buffer.isBuffer(contentBuffer) ? contentBuffer : Buffer.from(String(contentBuffer || ''), 'utf8');
+    const totalSize = buf.length;
+    const lastModified = Math.floor(Date.now() / 1000);
+    const targetDir = parentFolderId || 1;
+
+    const sendWithQuery = (queryObj) => {
+      const qs = new URLSearchParams(queryObj).toString();
+      const uploadPath = `/3/drive/${this.driveId}/upload?${qs}`;
+
+      return new Promise((resolve, reject) => {
+        const req = https.request(
+          `${API_BASE}${uploadPath}`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${this.apiToken}`,
+              'Content-Type': 'application/octet-stream',
+              'Content-Length': totalSize,
+              Accept: 'application/json'
+            }
+          },
+          (res) => {
+            const chunks = [];
+            res.on('data', (chunk) => chunks.push(chunk));
+            res.on('end', () => {
+              const body = Buffer.concat(chunks).toString('utf8');
+              let parsed = null;
+              try {
+                parsed = body ? JSON.parse(body) : null;
+              } catch (_) {
+                parsed = null;
+              }
+              if (res.statusCode >= 200 && res.statusCode < 300 && parsed?.result !== 'error') {
+                resolve(parsed?.data ? this.normalizeItem(parsed.data) : { id: existingFileId, name: fileName });
+              } else {
+                const detail = parsed?.error?.description || parsed?.error?.code || body || `HTTP ${res.statusCode}`;
+                reject(new Error(`Échec de l'enregistrement de "${fileName}" : ${detail}`));
+              }
+            });
+          }
+        );
+
+        req.on('error', (err) => reject(new Error(`Erreur réseau lors de l'enregistrement : ${err.message}`)));
+        req.end(buf);
+      });
+    };
+
+    if (existingFileId) {
+      try {
+        return await sendWithQuery({
+          file_id: String(existingFileId),
+          total_size: String(totalSize),
+          last_modified_at: String(lastModified)
+        });
+      } catch (_) {
+        // Fallback par directory_id + conflict=version
+      }
+    }
+
+    return sendWithQuery({
+      directory_id: String(targetDir),
+      file_name: fileName,
+      total_size: String(totalSize),
+      conflict: 'version',
+      last_modified_at: String(lastModified)
+    });
+  }
 }
 
 module.exports = { KDriveApiClient, guessMimeType };

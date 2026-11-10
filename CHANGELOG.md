@@ -3,6 +3,18 @@
 Toutes les modifications notables de **KVault Desktop** sont documentées dans ce fichier.
 Ce projet respecte le format [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et le [Semantic Versioning](https://semver.org/lang/fr/).
 
+## [0.6.0] - 2026-11-09
+### Ajouté
+- **💑 Pack 1 — Budget Couple "Niveau Pro & Cloud Partagé"** :
+  - **☁️ Synchronisation Cloud partagée sur kDrive (`/Budget Couple/couple-budget.json`)** : sauvegarde et fusion intelligente (*smart merge* sans doublons avec suivi des suppressions) de l'intégralité du budget sur votre kDrive Infomaniak pour partager vos comptes entre vos 2 PC, avec option de synchronisation automatique à chaque modification.
+  - **✏️ Édition complète des dépenses et des échéances récurrentes** : modification en 1 clic du titre, du montant, du payeur, de la date, de la règle de partage, des notes ou du justificatif d'une dépense ou d'une charge fixe existante.
+  - **🛒 Liste de courses partagée & Conversion 1-clic en Dépense** : nouvel onglet permettant de noter les courses et achats à prévoir (quantité, prix estimé, auteur), de les cocher au fur et à mesure et de cliquer sur **`🧾 Convertir les cochés en Dépense`** pour créer la dépense commune pré-remplie avec le détail des articles.
+  - **📈 Bilan Annuel, Graphiques 12 mois & Exports CSV / Rapport PDF** : nouvel onglet **Bilan & Export** avec graphique d'évolution sur 12 mois, KPIs annuels (total annuel, moyenne mensuelle, 1er poste de dépense), export **CSV (Excel)** et génération d'un **Bilan Imprimable / PDF** complet.
+- **📝 Pack 3 — Éditeur Cloud Direct & Création de Notes / Markdown sur kDrive** :
+  - **✏️ Modification directe dans le cloud (`kdrive:saveTextFile`)** : éditez n'importe quel fichier `.txt`, `.md`, `.json`, `.csv`, `.js`, `.py`, `.html`, `.xml`, `.yml` ou `.log` directement dans la visionneuse KVault et enregistrez-le sur kDrive en 1 clic sans téléchargement intermédiaire.
+  - **👁 Rendu Markdown formaté** : bascule instantanée entre le code brut et l'aperçu Markdown mis en page.
+  - **📝 Bouton `+ Note` dans l'explorateur kDrive** : création directe d'une note `.md` / `.txt` dans le dossier kDrive courant avec barre d'outils Markdown (`H1`, `Gras`, `Liste`, `Tâche`, `Code`, `Aperçu`).
+
 ## [0.5.0] - 2026-11-09
 ### Ajouté
 - **💑 Module Budget & Dépenses de Couple (`budget-service.js`)** :

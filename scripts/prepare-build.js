@@ -8,6 +8,7 @@ const WINCODESIGN_URL =
 function closeRunningKVaultProcesses() {
   const exeNames = [
     'KVault Desktop.exe',
+    'KVault-Desktop-0.6.0-Portable.exe',
     'KVault-Desktop-0.5.0-Portable.exe',
     'KVault-Desktop-0.4.0-Portable.exe',
     'KVault-Desktop-0.3.0-Portable.exe',

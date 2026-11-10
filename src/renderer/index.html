@@ -201,6 +201,7 @@
             </div>
 
             <button class="btn btn-secondary" id="btnNewFolder" title="Créer un sous-dossier">+ Dossier</button>
+            <button class="btn btn-accent-outline" id="btnNewNote" title="Créer une note ou un document Markdown directement sur kDrive">📝 + Note</button>
             <button class="btn btn-accent-outline" id="btnUploadPhotos" title="Sauvegarder des photos">📸 Photos</button>
             <button class="btn btn-primary" id="btnUploadFiles">⬆️ Sauvegarder</button>
             <button class="btn btn-secondary" id="btnUploadFolder" title="Sauvegarder un dossier entier">📁 Dossier</button>
@@ -467,7 +468,23 @@
                 <circle cx="12" cy="12" r="5" />
                 <circle cx="12" cy="12" r="1.5" fill="currentColor" />
               </svg>
-              <span>Cagnottes à deux</span>
+              <span>Cagnottes</span>
+            </button>
+            <button type="button" class="budget-tab-btn" data-budgettab="shopping">
+              <svg class="budget-tab-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="9" cy="21" r="1" />
+                <circle cx="20" cy="21" r="1" />
+                <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+              <span>Liste de courses</span>
+            </button>
+            <button type="button" class="budget-tab-btn" data-budgettab="analytics">
+              <svg class="budget-tab-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="20" x2="18" y2="10" stroke-linecap="round" />
+                <line x1="12" y1="20" x2="12" y2="4" stroke-linecap="round" />
+                <line x1="6" y1="20" x2="6" y2="14" stroke-linecap="round" />
+              </svg>
+              <span>Bilan &amp; Stats</span>
             </button>
             <button type="button" class="budget-tab-btn" data-budgettab="profiles">
               <svg class="budget-tab-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -481,6 +498,9 @@
           </div>
 
           <div class="budget-top-actions">
+            <button type="button" class="btn btn-secondary btn-sm" id="btnBudgetSyncKDrive" title="Synchroniser et partager le budget sur votre kDrive (/Budget Couple/couple-budget.json)">
+              ☁️ Sync kDrive
+            </button>
             <button type="button" class="btn btn-accent-outline" id="btnOpenNewRecurringModal">+ Paiement récurrent</button>
             <button type="button" class="btn btn-secondary" id="btnOpenSettleModal">Rembourser / Solder</button>
             <button type="button" class="btn btn-primary" id="btnOpenNewExpenseModal">+ Ajouter une dépense</button>
@@ -658,6 +678,108 @@
             </div>
           </div>
 
+          <!-- SOUS-VUE 3B : LISTE DE COURSES & ACHATS À PRÉVOIR (v0.6.0 — Pack 1) -->
+          <div class="budget-subview hidden" id="budgetTabShopping">
+            <div class="budget-section-card">
+              <div class="card-section-title">
+                <span>🛒 Liste de courses &amp; Achats communs à prévoir</span>
+                <div class="shopping-top-btns">
+                  <button type="button" class="btn btn-secondary btn-sm" id="btnClearCheckedShopping">
+                    🧹 Retirer les articles cochés
+                  </button>
+                  <button type="button" class="btn btn-primary btn-sm" id="btnConvertShoppingToExpense">
+                    🧾 Convertir les cochés en Dépense
+                  </button>
+                </div>
+              </div>
+              <p class="hint">
+                Notez vos courses et achats à faire à deux. Cochez-les au fur et à mesure, puis cliquez sur
+                <strong>Convertir les cochés en Dépense</strong> pour créer automatiquement la dépense commune avec le détail des articles !
+              </p>
+
+              <form id="shoppingQuickForm" class="shopping-quick-form">
+                <input type="text" id="shopNameInput" placeholder="Ajouter un article (ex: Pack de lait, Lessive, Café...)" required />
+                <input type="text" id="shopQtyInput" placeholder="Qté / Détail (ex: x2, 1kg)" />
+                <input type="number" id="shopPriceInput" min="0" step="0.01" placeholder="Prix estimé € (optionnel)" />
+                <select id="shopAddedBySelect">
+                  <option value="A" id="shopOptProfileA">Ajouté par Loïc</option>
+                  <option value="B" id="shopOptProfileB">Ajouté par Ma Copine</option>
+                </select>
+                <button type="submit" class="btn btn-primary">+ Ajouter</button>
+              </form>
+
+              <div class="shopping-summary-strip" id="shoppingSummaryStrip">
+                0 article(s) dans la liste • 0 coché(s)
+              </div>
+
+              <div id="budgetShoppingList" class="budget-expenses-list"></div>
+            </div>
+          </div>
+
+          <!-- SOUS-VUE 3C : BILAN ANNUEL, GRAPHIQUES & EXPORTS (v0.6.0 — Pack 1) -->
+          <div class="budget-subview hidden" id="budgetTabAnalytics">
+            <div class="budget-kpi-grid" style="grid-template-columns: repeat(3, 1fr)">
+              <div class="budget-kpi-card">
+                <div class="kpi-label">📈 TOTAL DÉPENSÉ SUR L'ANNÉE</div>
+                <div class="kpi-total-amount" id="analyticsYearTotal">0,00 €</div>
+                <div class="kpi-sub" id="analyticsYearSub">Sur l'année sélectionnée</div>
+              </div>
+              <div class="budget-kpi-card">
+                <div class="kpi-label">📊 MOYENNE MENSUELLE DU COUPLE</div>
+                <div class="kpi-total-amount" id="analyticsMonthlyAvg">0,00 €</div>
+                <div class="kpi-sub">Moyenne par mois actif</div>
+              </div>
+              <div class="budget-kpi-card">
+                <div class="kpi-label">🏆 PREMIER POSTE DE DÉPENSE</div>
+                <div class="kpi-balance-headline" id="analyticsTopCategory">—</div>
+                <div class="kpi-sub" id="analyticsTopCategorySub">Sur l'année en cours</div>
+              </div>
+            </div>
+
+            <div class="budget-overview-cols" style="margin-top: 16px">
+              <div class="budget-section-card">
+                <div class="card-section-title">
+                  <span id="analyticsChartTitle">📊 Évolution mensuelle des dépenses communes (12 mois)</span>
+                  <span class="hint">Cliquez sur une barre pour afficher le mois correspondant</span>
+                </div>
+                <div class="monthly-bar-chart" id="budgetMonthlyChart"></div>
+              </div>
+
+              <div class="budget-side-col">
+                <div class="budget-section-card">
+                  <div class="card-section-title">
+                    <span>📄 Exports &amp; Rapports (Excel CSV / PDF)</span>
+                  </div>
+                  <p class="hint">
+                    Exportez vos dépenses du mois ou générez un bilan complet prêt à imprimer ou enregistrer en PDF.
+                  </p>
+                  <div class="form-actions-inline">
+                    <button type="button" class="btn btn-accent-outline" id="btnExportBudgetCsv">
+                      📊 Exporter CSV (Excel)
+                    </button>
+                    <button type="button" class="btn btn-primary" id="btnExportBudgetReport">
+                      🖨️ Bilan Imprimable / PDF
+                    </button>
+                  </div>
+                </div>
+
+                <div class="budget-section-card">
+                  <div class="card-section-title">
+                    <span>☁️ Synchronisation Cloud kDrive Partagée</span>
+                  </div>
+                  <p class="hint">
+                    Sauvegarde et fusionne votre budget dans <code>/Budget Couple/couple-budget.json</code> sur votre kDrive Infomaniak pour partager vos comptes entre vos 2 PC.
+                  </p>
+                  <label class="checkbox-row">
+                    <input type="checkbox" id="chkBudgetAutoSyncKDrive" />
+                    <span>Synchroniser automatiquement sur kDrive à chaque modification</span>
+                  </label>
+                  <div class="hint" id="budgetCloudSyncStatusLabel">Dernière synchro cloud : jamais</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- SOUS-VUE 4 : PROFILS DU COUPLE & RÈGLE DE SÉPARATION -->
           <div class="budget-subview hidden" id="budgetTabProfiles">
             <form id="budgetProfilesForm" class="settings-card">
@@ -746,7 +868,7 @@
           <div class="settings-card update-card">
             <div class="card-section-title">
               <span>🚀 Version &amp; Mises à jour GitHub</span>
-              <span class="code-status-pill custom" id="settingsVersionBadge">v0.5.0</span>
+              <span class="code-status-pill custom" id="settingsVersionBadge">v0.6.0</span>
             </div>
             <div class="update-row">
               <div class="update-status-text" id="updateStatusText">
@@ -1074,6 +1196,10 @@
             <button type="button" class="zoom-btn" id="btnZoomIn" title="Zoom avant (+)">+</button>
           </div>
 
+          <button type="button" class="btn btn-secondary hidden" id="btnToggleMdPreview">👁 Aperçu Markdown</button>
+          <button type="button" class="btn btn-accent-outline hidden" id="btnEditPreviewText">✏️ Modifier dans le cloud</button>
+          <button type="button" class="btn btn-primary hidden" id="btnSavePreviewText">💾 Enregistrer sur kDrive</button>
+          <button type="button" class="btn btn-secondary hidden" id="btnCancelEditPreviewText">Annuler</button>
           <button type="button" class="btn btn-accent-outline hidden" id="btnCopyPreviewText">📋 Copier le texte</button>
           <button type="button" class="btn btn-secondary" id="btnSharePreview" title="Créer ou copier un lien public">🔗 Partager</button>
           <button type="button" class="btn btn-primary" id="btnDownloadPreview">⬇️ Télécharger</button>
@@ -1105,11 +1231,50 @@
         <!-- 4. Lecteur PDF natif -->
         <iframe id="previewPdfFrame" class="preview-pdf-frame hidden" title="Lecteur PDF"></iframe>
 
-        <!-- 5. Lecteur Texte / Code / JSON / Markdown -->
+        <!-- 5. Lecteur Texte / Code / JSON / Markdown & Éditeur Cloud Direct (v0.6.0 — Pack 3) -->
         <pre id="previewCodeBox" class="preview-code-box selectable hidden"></pre>
+        <div id="previewMarkdownBox" class="preview-markdown-box selectable hidden"></div>
+        <textarea id="previewEditorTextarea" class="preview-editor-textarea selectable hidden" spellcheck="false"></textarea>
 
         <button type="button" class="gallery-nav-btn next" id="btnNextPreview" title="Suivant (→)">❯</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Modale : Créer une nouvelle Note / Document Markdown sur kDrive (v0.6.0 — Pack 3) -->
+  <div class="modal-backdrop hidden" id="noteEditorModal">
+    <div class="modal-card modal-wide note-editor-dialog">
+      <h3>📝 Créer une note ou un fichier Markdown sur kDrive</h3>
+      <form id="newNoteForm" class="bw-form">
+        <div class="form-grid-2">
+          <div class="form-row">
+            <label for="newNoteFileNameInput">Nom du fichier sur kDrive *</label>
+            <input type="text" id="newNoteFileNameInput" placeholder="Ex : Notes-Projet.md, Liste.txt, Config.json..." value="Nouvelle-Note.md" required />
+          </div>
+          <div class="form-row">
+            <label>Outils rapides Markdown</label>
+            <div class="md-toolbar">
+              <button type="button" class="btn btn-secondary btn-sm" id="btnMdH1">H1</button>
+              <button type="button" class="btn btn-secondary btn-sm" id="btnMdBold">Gras</button>
+              <button type="button" class="btn btn-secondary btn-sm" id="btnMdList">• Liste</button>
+              <button type="button" class="btn btn-secondary btn-sm" id="btnMdCheck">☑️ Tâche</button>
+              <button type="button" class="btn btn-secondary btn-sm" id="btnMdCode">&lt;/&gt; Code</button>
+              <button type="button" class="btn btn-accent-outline btn-sm" id="btnMdPreviewToggle">👁 Aperçu</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label for="newNoteContentInput">Contenu du document</label>
+          <textarea id="newNoteContentInput" class="note-modal-textarea selectable" rows="12" placeholder="# Titre de ma note&#10;&#10;- Point 1&#10;- Point 2"></textarea>
+          <div id="newNotePreviewBox" class="preview-markdown-box note-modal-preview selectable hidden"></div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="btnCancelNewNote">Annuler</button>
+          <button type="submit" class="btn btn-primary" id="btnSaveNewNote">☁️ Enregistrer dans ce dossier kDrive</button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -1179,10 +1344,10 @@
   <!-- ====================================================================== -->
   <!-- MODALES BUDGET & DÉPENSES DE COUPLE (v0.5.0)                           -->
   <!-- ====================================================================== -->
-  <!-- 1. Modale : Nouvelle Dépense Commune -->
+  <!-- 1. Modale : Nouvelle / Modifier Dépense Commune -->
   <div class="modal-backdrop hidden" id="budgetExpenseModal">
     <div class="modal-card modal-wide">
-      <h3>🧾 Ajouter une dépense commune</h3>
+      <h3 id="budgetExpenseModalTitle">🧾 Ajouter une dépense commune</h3>
       <form id="budgetExpenseForm" class="bw-form">
         <div class="form-grid-2">
           <div class="form-row">
@@ -1289,10 +1454,10 @@
     </div>
   </div>
 
-  <!-- 2. Modale : Nouveau Paiement Récurrent / Charge Fixe -->
+  <!-- 2. Modale : Nouveau / Modifier Paiement Récurrent -->
   <div class="modal-backdrop hidden" id="budgetRecurringModal">
     <div class="modal-card modal-wide">
-      <h3>📅 Ajouter un paiement récurrent (Calendrier mensuel)</h3>
+      <h3 id="budgetRecurringModalTitle">📅 Ajouter un paiement récurrent (Calendrier mensuel)</h3>
       <form id="budgetRecurringForm" class="bw-form">
         <div class="form-grid-2">
           <div class="form-row">

@@ -1168,6 +1168,20 @@ ipcMain.handle('kdrive:delete', async (_event, { fileId }) => {
   }
 });
 
+ipcMain.handle('kdrive:saveTextFile', async (_event, { parentId, fileId, fileName, content }) => {
+  try {
+    const { config } = loadConfig(app);
+    const client = createKDriveClient(config);
+    const targetParent = parentId || getRootFolderId(config);
+    const cleanName = String(fileName || 'note.md').trim();
+    const buf = Buffer.from(String(content ?? ''), 'utf8');
+    const saved = await client.uploadBuffer(targetParent, cleanName, buf, fileId || null);
+    return { ok: true, item: saved };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
 // ============================================================================
 // IPC : Coffre-fort Bitwarden / Vaultwarden (v0.2.0+)
 // ============================================================================
@@ -1290,8 +1304,22 @@ ipcMain.handle('bw:generatePassword', (_event, options) => {
 });
 
 // ============================================================================
-// IPC : Module Budget & Dépenses Couple (v0.5.0)
+// IPC : Module Budget & Dépenses Couple (v0.5.0 / v0.6.0)
 // ============================================================================
+function autoPushBudgetIfEnabled() {
+  try {
+    const budget = getBudget();
+    if (!budget.getState().cloudSyncEnabled) return;
+    const { config } = loadConfig(app);
+    if (!isConfigured(config)) return;
+    const client = createKDriveClient(config);
+    const rootId = getRootFolderId(config);
+    budget.syncWithKDrive(client, rootId, false).catch(() => {});
+  } catch (_) {
+    // Sync silencieux en tâche de fond
+  }
+}
+
 ipcMain.handle('budget:getState', () => {
   try {
     return { ok: true, data: getBudget().getState() };
@@ -1303,6 +1331,7 @@ ipcMain.handle('budget:getState', () => {
 ipcMain.handle('budget:updateProfiles', (_event, payload) => {
   try {
     const data = getBudget().updateProfiles(payload);
+    autoPushBudgetIfEnabled();
     return { ok: true, data };
   } catch (err) {
     return { ok: false, error: err.message };
@@ -1312,6 +1341,7 @@ ipcMain.handle('budget:updateProfiles', (_event, payload) => {
 ipcMain.handle('budget:addExpense', (_event, payload) => {
   try {
     getBudget().addExpense(payload);
+    autoPushBudgetIfEnabled();
     return { ok: true, data: getBudget().getState() };
   } catch (err) {
     return { ok: false, error: err.message };
@@ -1321,6 +1351,7 @@ ipcMain.handle('budget:addExpense', (_event, payload) => {
 ipcMain.handle('budget:updateExpense', (_event, { id, patch }) => {
   try {
     getBudget().updateExpense(id, patch);
+    autoPushBudgetIfEnabled();
     return { ok: true, data: getBudget().getState() };
   } catch (err) {
     return { ok: false, error: err.message };
@@ -1330,6 +1361,7 @@ ipcMain.handle('budget:updateExpense', (_event, { id, patch }) => {
 ipcMain.handle('budget:deleteExpense', (_event, { id }) => {
   try {
     getBudget().deleteExpense(id);
+    autoPushBudgetIfEnabled();
     return { ok: true, data: getBudget().getState() };
   } catch (err) {
     return { ok: false, error: err.message };
@@ -1419,6 +1451,7 @@ ipcMain.handle('budget:uploadReceipt', async () => {
 ipcMain.handle('budget:addSettlement', (_event, payload) => {
   try {
     getBudget().addSettlement(payload);
+    autoPushBudgetIfEnabled();
     return { ok: true, data: getBudget().getState() };
   } catch (err) {
     return { ok: false, error: err.message };
@@ -1428,6 +1461,7 @@ ipcMain.handle('budget:addSettlement', (_event, payload) => {
 ipcMain.handle('budget:deleteSettlement', (_event, { id }) => {
   try {
     getBudget().deleteSettlement(id);
+    autoPushBudgetIfEnabled();
     return { ok: true, data: getBudget().getState() };
   } catch (err) {
     return { ok: false, error: err.message };
@@ -1437,6 +1471,17 @@ ipcMain.handle('budget:deleteSettlement', (_event, { id }) => {
 ipcMain.handle('budget:addRecurring', (_event, payload) => {
   try {
     getBudget().addRecurring(payload);
+    autoPushBudgetIfEnabled();
+    return { ok: true, data: getBudget().getState() };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('budget:updateRecurring', (_event, { id, patch }) => {
+  try {
+    getBudget().updateRecurring(id, patch);
+    autoPushBudgetIfEnabled();
     return { ok: true, data: getBudget().getState() };
   } catch (err) {
     return { ok: false, error: err.message };
@@ -1446,6 +1491,7 @@ ipcMain.handle('budget:addRecurring', (_event, payload) => {
 ipcMain.handle('budget:deleteRecurring', (_event, { id }) => {
   try {
     getBudget().deleteRecurring(id);
+    autoPushBudgetIfEnabled();
     return { ok: true, data: getBudget().getState() };
   } catch (err) {
     return { ok: false, error: err.message };
@@ -1455,6 +1501,7 @@ ipcMain.handle('budget:deleteRecurring', (_event, { id }) => {
 ipcMain.handle('budget:toggleRecurringPaid', (_event, { recurringId, month }) => {
   try {
     const result = getBudget().toggleRecurringPaidForMonth(recurringId, month);
+    autoPushBudgetIfEnabled();
     return { ok: true, paid: result.paid, data: getBudget().getState() };
   } catch (err) {
     return { ok: false, error: err.message };
@@ -1464,6 +1511,7 @@ ipcMain.handle('budget:toggleRecurringPaid', (_event, { recurringId, month }) =>
 ipcMain.handle('budget:addGoal', (_event, payload) => {
   try {
     getBudget().addGoal(payload);
+    autoPushBudgetIfEnabled();
     return { ok: true, data: getBudget().getState() };
   } catch (err) {
     return { ok: false, error: err.message };
@@ -1473,6 +1521,7 @@ ipcMain.handle('budget:addGoal', (_event, payload) => {
 ipcMain.handle('budget:contributeGoal', (_event, { goalId, profileId, deltaAmount }) => {
   try {
     getBudget().contributeGoal(goalId, profileId, deltaAmount);
+    autoPushBudgetIfEnabled();
     return { ok: true, data: getBudget().getState() };
   } catch (err) {
     return { ok: false, error: err.message };
@@ -1482,7 +1531,120 @@ ipcMain.handle('budget:contributeGoal', (_event, { goalId, profileId, deltaAmoun
 ipcMain.handle('budget:deleteGoal', (_event, { goalId }) => {
   try {
     getBudget().deleteGoal(goalId);
+    autoPushBudgetIfEnabled();
     return { ok: true, data: getBudget().getState() };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+// Liste de courses & Achats à prévoir (v0.6.0 — Pack 1)
+ipcMain.handle('budget:addShoppingItem', (_event, payload) => {
+  try {
+    getBudget().addShoppingItem(payload);
+    autoPushBudgetIfEnabled();
+    return { ok: true, data: getBudget().getState() };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('budget:toggleShoppingItem', (_event, { id }) => {
+  try {
+    getBudget().toggleShoppingItem(id);
+    autoPushBudgetIfEnabled();
+    return { ok: true, data: getBudget().getState() };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('budget:deleteShoppingItem', (_event, { id }) => {
+  try {
+    getBudget().deleteShoppingItem(id);
+    autoPushBudgetIfEnabled();
+    return { ok: true, data: getBudget().getState() };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('budget:clearCheckedShopping', () => {
+  try {
+    const removed = getBudget().clearCheckedShoppingItems();
+    autoPushBudgetIfEnabled();
+    return { ok: true, removed, data: getBudget().getState() };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+// Synchronisation Cloud kDrive & Exports CSV / Rapport (v0.6.0 — Pack 1)
+ipcMain.handle('budget:setCloudSync', (_event, { enabled }) => {
+  try {
+    const data = getBudget().setCloudSyncEnabled(enabled);
+    if (enabled) autoPushBudgetIfEnabled();
+    return { ok: true, data };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('budget:syncKDrive', async (_event, { pushOnly } = {}) => {
+  try {
+    const { config } = loadConfig(app);
+    if (!isConfigured(config)) {
+      return { ok: false, error: 'Veuillez d\'abord configurer votre compte Infomaniak kDrive dans Paramètres.' };
+    }
+    const client = createKDriveClient(config);
+    const rootId = getRootFolderId(config);
+    const data = await getBudget().syncWithKDrive(client, rootId, Boolean(pushOnly));
+    return { ok: true, data };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('budget:exportCsv', async (_event, { month } = {}) => {
+  try {
+    const csvContent = getBudget().generateCsvString(month || null);
+    const defaultName = `Budget-Couple-${month || 'Complet'}.csv`;
+
+    const saveRes = await dialog.showSaveDialog(mainWindow, {
+      title: 'Exporter le Budget Couple au format CSV (Excel)',
+      defaultPath: defaultName,
+      filters: [{ name: 'Fichier CSV Excel (*.csv)', extensions: ['csv'] }]
+    });
+
+    if (saveRes.canceled || !saveRes.filePath) {
+      return { ok: true, canceled: true };
+    }
+
+    fs.writeFileSync(saveRes.filePath, csvContent, 'utf8');
+    return { ok: true, canceled: false, savedPath: saveRes.filePath };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('budget:exportReport', async (_event, { month } = {}) => {
+  try {
+    const htmlContent = getBudget().generateHtmlReport(month || null);
+    const defaultName = `Bilan-Budget-Couple-${month || 'Complet'}.html`;
+
+    const saveRes = await dialog.showSaveDialog(mainWindow, {
+      title: 'Enregistrer le rapport mensuel imprimable (HTML / PDF)',
+      defaultPath: defaultName,
+      filters: [{ name: 'Rapport Bilan Imprimable (*.html)', extensions: ['html'] }]
+    });
+
+    if (saveRes.canceled || !saveRes.filePath) {
+      return { ok: true, canceled: true };
+    }
+
+    fs.writeFileSync(saveRes.filePath, htmlContent, 'utf8');
+    await shell.openPath(saveRes.filePath);
+    return { ok: true, canceled: false, savedPath: saveRes.filePath };
   } catch (err) {
     return { ok: false, error: err.message };
   }

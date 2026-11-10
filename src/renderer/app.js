@@ -47,7 +47,7 @@ const state = {
   qvSelectedIndex: 0,
   latestUpdateUrl: '',
 
-  // Budget & Dépenses Couple (v0.5.0)
+  // Budget & Dépenses Couple (v0.5.0 / v0.6.0)
   budgetData: null,
   budgetMonth: new Date().toISOString().slice(0, 7),
   budgetActiveTab: 'overview',
@@ -56,7 +56,13 @@ const state = {
   budgetFilterStatus: 'all',
   budgetFilterCategory: 'all',
   pendingExpenseReceipt: null,
-  quickSettleDraft: null
+  quickSettleDraft: null,
+  editingExpenseId: null,
+  editingRecurringId: null,
+
+  // Éditeur Cloud Direct & Markdown (v0.6.0 — Pack 3)
+  previewEditMode: false,
+  previewMdMode: false
 };
 
 // ============================================================================
@@ -194,7 +200,8 @@ function hideAllFloatingModals() {
     'budgetExpenseModal',
     'budgetRecurringModal',
     'budgetSettleModal',
-    'budgetGoalModal'
+    'budgetGoalModal',
+    'noteEditorModal'
   ].forEach((id) => document.getElementById(id)?.classList.add('hidden'));
 }
 
@@ -1081,10 +1088,37 @@ function stopActiveMediaPreview() {
   if (codeBox) {
     codeBox.textContent = '';
   }
+  const mdBox = document.getElementById('previewMarkdownBox');
+  const editArea = document.getElementById('previewEditorTextarea');
+  if (mdBox) mdBox.innerHTML = '';
+  if (editArea) editArea.value = '';
 
-  [imgStage, videoEl, audioCard, pdfEl, codeBox].forEach((el) => el?.classList.add('hidden'));
+  [imgStage, videoEl, audioCard, pdfEl, codeBox, mdBox, editArea].forEach((el) => el?.classList.add('hidden'));
 
   window.kvault.setMediaPlaying(false);
+}
+
+function escapeHtmlSafe(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function renderSimpleMarkdownToHtml(md) {
+  let html = escapeHtmlSafe(md);
+  html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+  html = html.replace(/^\s*- \[x\] (.+)$/gim, '<div>☑️ <strike>$1</strike></div>');
+  html = html.replace(/^\s*- \[ \] (.+)$/gm, '<div>⬜ $1</div>');
+  html = html.replace(/^\s*[-*] (.+)$/gm, '<li>$1</li>');
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  html = html.replace(/\n\n/g, '<br><br>');
+  return html;
 }
 
 function closeUniversalPreview() {
@@ -1156,6 +1190,12 @@ async function renderPreviewAtCurrentIndex() {
 
   document.getElementById('previewZoomBar').classList.toggle('hidden', kind !== 'image');
   document.getElementById('btnCopyPreviewText').classList.add('hidden');
+  document.getElementById('btnToggleMdPreview').classList.add('hidden');
+  document.getElementById('btnEditPreviewText').classList.add('hidden');
+  document.getElementById('btnSavePreviewText').classList.add('hidden');
+  document.getElementById('btnCancelEditPreviewText').classList.add('hidden');
+  state.previewEditMode = false;
+  state.previewMdMode = false;
   applyImageZoom(1);
 
   [imgStage, videoEl, audioCard, pdfFrame, codeBox].forEach((el) => el.classList.add('hidden'));
@@ -1229,6 +1269,13 @@ async function renderPreviewAtCurrentIndex() {
     codeBox.textContent = res.truncated ? `${formatted}\n\n--- [Aperçu tronqué à 512 Ko] ---` : formatted;
     codeBox.classList.remove('hidden');
     document.getElementById('btnCopyPreviewText').classList.remove('hidden');
+    if (!res.truncated) {
+      document.getElementById('btnEditPreviewText').classList.remove('hidden');
+    }
+    if (ext === 'md' || ext === 'markdown') {
+      document.getElementById('btnToggleMdPreview').classList.remove('hidden');
+      document.getElementById('btnToggleMdPreview').textContent = '👁 Aperçu Markdown';
+    }
   }
 }
 
@@ -1975,6 +2022,8 @@ function switchBudgetTab(tabName) {
   document.getElementById('budgetTabOverview').classList.toggle('hidden', tabName !== 'overview');
   document.getElementById('budgetTabCalendar').classList.toggle('hidden', tabName !== 'calendar');
   document.getElementById('budgetTabGoals').classList.toggle('hidden', tabName !== 'goals');
+  document.getElementById('budgetTabShopping').classList.toggle('hidden', tabName !== 'shopping');
+  document.getElementById('budgetTabAnalytics').classList.toggle('hidden', tabName !== 'analytics');
   document.getElementById('budgetTabProfiles').classList.toggle('hidden', tabName !== 'profiles');
 }
 
@@ -2015,6 +2064,14 @@ function renderBudgetAll() {
 
   document.getElementById('settleOptBtoA').textContent = `${profB.emoji} ${profB.name} rembourse ${profA.emoji} ${profA.name}`;
   document.getElementById('settleOptAtoB').textContent = `${profA.emoji} ${profA.name} rembourse ${profB.emoji} ${profB.name}`;
+
+  document.getElementById('shopOptProfileA').textContent = `Ajouté par ${profA.name}`;
+  document.getElementById('shopOptProfileB').textContent = `Ajouté par ${profB.name}`;
+
+  document.getElementById('chkBudgetAutoSyncKDrive').checked = Boolean(data.cloudSyncEnabled);
+  document.getElementById('budgetCloudSyncStatusLabel').textContent = data.lastCloudSyncAt
+    ? `Dernière synchro kDrive : ${new Date(data.lastCloudSyncAt).toLocaleString('fr-FR')}`
+    : 'Dernière synchro cloud : jamais';
 
   // Formulaire Profils
   document.getElementById('inputProfileNameA').value = profA.name;
@@ -2110,6 +2167,8 @@ function renderBudgetAll() {
   renderBudgetSettlements(data.settlements || [], data.profiles);
   renderBudgetCalendarAndRecurring(data.recurring || [], monthExpenses, data.profiles);
   renderBudgetGoals(data.goals || [], data.profiles);
+  renderBudgetShoppingList(data.shoppingList || [], data.profiles);
+  renderBudgetAnalytics(data.expenses || [], data.profiles);
 }
 
 function updateProfileSliderLabels(pctA, nameA, nameB) {
@@ -2273,6 +2332,13 @@ function renderBudgetExpensesAndBreakdown(monthExpenses, profiles) {
         }
       });
 
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'icon-btn small';
+      editBtn.title = 'Modifier cette dépense';
+      editBtn.textContent = '✏️';
+      editBtn.addEventListener('click', () => openEditExpenseModal(exp));
+
       const delBtn = document.createElement('button');
       delBtn.type = 'button';
       delBtn.className = 'icon-btn small danger';
@@ -2289,6 +2355,7 @@ function renderBudgetExpensesAndBreakdown(monthExpenses, profiles) {
 
       right.appendChild(amountBox);
       right.appendChild(receiptBtn);
+      right.appendChild(editBtn);
       right.appendChild(delBtn);
 
       row.appendChild(left);
@@ -2489,6 +2556,13 @@ function renderBudgetCalendarAndRecurring(recurringList, monthExpenses, profiles
       }
     });
 
+    const editRecBtn = document.createElement('button');
+    editRecBtn.type = 'button';
+    editRecBtn.className = 'icon-btn small';
+    editRecBtn.textContent = '✏️';
+    editRecBtn.title = 'Modifier cette échéance récurrente';
+    editRecBtn.addEventListener('click', () => openEditRecurringModal(rec));
+
     const delBtn = document.createElement('button');
     delBtn.type = 'button';
     delBtn.className = 'icon-btn small danger';
@@ -2504,6 +2578,7 @@ function renderBudgetCalendarAndRecurring(recurringList, monthExpenses, profiles
     });
 
     right.appendChild(toggleBtn);
+    right.appendChild(editRecBtn);
     right.appendChild(delBtn);
 
     row.appendChild(left);
@@ -2627,6 +2702,207 @@ function updateExpenseModalLiveSplitPreview() {
   const exactB = Math.max(0, amount - exactA);
   document.getElementById('expExactLivePreview').textContent = formatCurrency(exactB);
 }
+
+function openEditExpenseModal(exp) {
+  state.editingExpenseId = exp.id;
+  state.pendingExpenseReceipt = exp.receipt || null;
+  document.getElementById('budgetExpenseModalTitle').textContent = `✏️ Modifier : ${exp.title}`;
+  document.getElementById('expTitleInput').value = exp.title || '';
+  document.getElementById('expAmountInput').value = String(exp.amount || '');
+  document.getElementById('expCategoryInput').value = exp.category || 'groceries';
+  document.getElementById('expDateInput').value = exp.date || new Date().toISOString().slice(0, 10);
+  document.getElementById('expStatusInput').value = exp.status || 'paid';
+  document.getElementById('expPaidByInput').value = exp.paidBy || 'A';
+  document.getElementById('expSplitModeInput').value = exp.splitMode || 'equal';
+  document.getElementById('expSplitPercentAInput').value = String(exp.splitPercentA ?? 50);
+  document.getElementById('expExactShareAInput').value = String(exp.exactShareA ?? (exp.amount || 0) / 2);
+  document.getElementById('expNotesInput').value = exp.notes || '';
+  document.getElementById('expAttachedReceiptLabel').textContent = exp.receipt
+    ? `✅ Justificatif : ${exp.receipt.fileName}`
+    : 'Aucun justificatif joint';
+
+  updateExpenseModalLiveSplitPreview();
+  document.getElementById('budgetExpenseModal').classList.remove('hidden');
+  document.getElementById('expTitleInput').focus();
+}
+
+function openEditRecurringModal(rec) {
+  state.editingRecurringId = rec.id;
+  document.getElementById('budgetRecurringModalTitle').textContent = `✏️ Modifier l'échéance : ${rec.title}`;
+  document.getElementById('recTitleInput').value = rec.title || '';
+  document.getElementById('recAmountInput').value = String(rec.amount || '');
+  document.getElementById('recDayInput').value = String(rec.dayOfMonth || 5);
+  document.getElementById('recCategoryInput').value = rec.category || 'rent';
+  document.getElementById('recPaidByInput').value = rec.paidBy || 'A';
+  document.getElementById('recSplitModeInput').value = rec.splitMode || 'equal';
+  document.getElementById('recNotesInput').value = rec.notes || '';
+  document.getElementById('budgetRecurringModal').classList.remove('hidden');
+  document.getElementById('recTitleInput').focus();
+}
+
+function renderBudgetShoppingList(shoppingList, profiles) {
+  const listEl = document.getElementById('budgetShoppingList');
+  listEl.innerHTML = '';
+
+  const checkedCount = shoppingList.filter((it) => it.checked).length;
+  const estTotal = shoppingList.reduce((acc, it) => acc + (Number(it.estimatedPrice) || 0), 0);
+  document.getElementById('shoppingSummaryStrip').textContent =
+    `${shoppingList.length} article(s) dans la liste • ${checkedCount} coché(s)${estTotal > 0 ? ` • Estimation totale : ${formatCurrency(estTotal)}` : ''}`;
+
+  if (shoppingList.length === 0) {
+    listEl.innerHTML = `
+      <div class="state-box" style="padding:26px">
+        <p>Votre liste de courses commune est vide. Ajoutez vos articles ci-dessus !</p>
+      </div>`;
+    return;
+  }
+
+  for (const item of shoppingList) {
+    const adder = item.addedBy === 'B' ? profiles.B : profiles.A;
+    const row = document.createElement('div');
+    row.className = `expense-row shopping-row${item.checked ? ' checked-item' : ''}`;
+
+    const left = document.createElement('div');
+    left.className = 'expense-left';
+    left.style.cursor = 'pointer';
+
+    const checkBtn = document.createElement('button');
+    checkBtn.type = 'button';
+    checkBtn.className = 'icon-btn small';
+    checkBtn.textContent = item.checked ? '☑️' : '⬜';
+
+    const meta = document.createElement('div');
+    meta.className = 'expense-meta';
+    meta.innerHTML = `
+      <div class="expense-title-line">
+        <span class="expense-title">${escapeHtmlSafe(item.name)}${item.quantity ? ` <span class="expense-split-pill">${escapeHtmlSafe(item.quantity)}</span>` : ''}</span>
+        <span class="expense-payer-pill">${adder.emoji} ${escapeHtmlSafe(adder.name)}</span>
+      </div>
+    `;
+
+    const toggleFn = async () => {
+      const res = await window.kvault.budgetToggleShoppingItem(item.id);
+      if (res.ok) {
+        state.budgetData = res.data;
+        renderBudgetAll();
+      }
+    };
+    left.addEventListener('click', toggleFn);
+
+    left.appendChild(checkBtn);
+    left.appendChild(meta);
+
+    const right = document.createElement('div');
+    right.className = 'expense-right';
+
+    if (item.estimatedPrice > 0) {
+      const priceBadge = document.createElement('span');
+      priceBadge.className = 'expense-amount-val';
+      priceBadge.style.fontSize = '13.5px';
+      priceBadge.textContent = `~ ${formatCurrency(item.estimatedPrice)}`;
+      right.appendChild(priceBadge);
+    }
+
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'icon-btn small danger';
+    delBtn.textContent = '🗑️';
+    delBtn.addEventListener('click', async () => {
+      const res = await window.kvault.budgetDeleteShoppingItem(item.id);
+      if (res.ok) {
+        state.budgetData = res.data;
+        renderBudgetAll();
+      }
+    });
+    right.appendChild(delBtn);
+
+    row.appendChild(left);
+    row.appendChild(right);
+    listEl.appendChild(row);
+  }
+}
+
+function renderBudgetAnalytics(allExpenses, profiles) {
+  const yearPrefix = state.budgetMonth.slice(0, 4);
+  const yearExpenses = allExpenses.filter((e) => e.status === 'paid' && String(e.month || '').startsWith(yearPrefix));
+
+  let yearTotal = 0;
+  const activeMonthsSet = new Set();
+  const catSums = {};
+
+  for (const exp of yearExpenses) {
+    const amt = Number(exp.amount) || 0;
+    yearTotal += amt;
+    if (exp.month) activeMonthsSet.add(exp.month);
+    catSums[exp.category] = (catSums[exp.category] || 0) + amt;
+  }
+
+  const avg = activeMonthsSet.size > 0 ? yearTotal / activeMonthsSet.size : 0;
+  document.getElementById('analyticsYearTotal').textContent = formatCurrency(yearTotal);
+  document.getElementById('analyticsYearSub').textContent = `Année ${yearPrefix} (${yearExpenses.length} dépense(s) payée(s))`;
+  document.getElementById('analyticsMonthlyAvg').textContent = formatCurrency(avg);
+
+  const topCatEntry = Object.entries(catSums).sort((a, b) => b[1] - a[1])[0];
+  if (topCatEntry) {
+    const cInfo = BUDGET_CATEGORIES[topCatEntry[0]] || BUDGET_CATEGORIES.other;
+    document.getElementById('analyticsTopCategory').textContent = `${cInfo.icon} ${cInfo.label}`;
+    document.getElementById('analyticsTopCategorySub').textContent = `${formatCurrency(topCatEntry[1])} cumulés en ${yearPrefix}`;
+  } else {
+    document.getElementById('analyticsTopCategory').textContent = '—';
+    document.getElementById('analyticsTopCategorySub').textContent = `Aucune dépense en ${yearPrefix}`;
+  }
+
+  document.getElementById('analyticsChartTitle').textContent = `📊 Évolution mensuelle des dépenses (${yearPrefix})`;
+
+  const chartEl = document.getElementById('budgetMonthlyChart');
+  chartEl.innerHTML = '';
+
+  const monthNamesShort = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
+  const monthBuckets = [];
+  let maxMonthTotal = 1;
+
+  for (let m = 1; m <= 12; m++) {
+    const mKey = `${yearPrefix}-${String(m).padStart(2, '0')}`;
+    const exps = yearExpenses.filter((e) => e.month === mKey);
+    let paidA = 0;
+    let paidB = 0;
+    for (const e of exps) {
+      const calc = computeClientExpenseShares(e, profiles);
+      paidA += calc.paidA;
+      paidB += calc.paidB;
+    }
+    const tot = paidA + paidB;
+    if (tot > maxMonthTotal) maxMonthTotal = tot;
+    monthBuckets.push({ mKey, label: monthNamesShort[m - 1], paidA, paidB, tot });
+  }
+
+  for (const b of monthBuckets) {
+    const col = document.createElement('div');
+    col.className = `mbar-col${b.mKey === state.budgetMonth ? ' active-month' : ''}`;
+    col.title = `${b.label} ${yearPrefix} : ${formatCurrency(b.tot)} (${profiles.A.name}: ${formatCurrency(b.paidA)} / ${profiles.B.name}: ${formatCurrency(b.paidB)})`;
+
+    const heightPct = b.tot > 0 ? Math.max(8, Math.round((b.tot / maxMonthTotal) * 155)) : 4;
+    const hA = b.tot > 0 ? Math.round((b.paidA / b.tot) * heightPct) : 0;
+    const hB = Math.max(0, heightPct - hA);
+
+    col.innerHTML = `
+      <div class="mbar-val">${b.tot > 0 ? `${Math.round(b.tot)}€` : ''}</div>
+      <div class="mbar-stack" style="height:${heightPct}px">
+        <div class="mbar-seg-a" style="height:${hA}px"></div>
+        <div class="mbar-seg-b" style="height:${hB}px"></div>
+      </div>
+      <div class="mbar-label">${b.label}</div>
+    `;
+
+    col.addEventListener('click', () => {
+      state.budgetMonth = b.mKey;
+      renderBudgetAll();
+    });
+
+    chartEl.appendChild(col);
+  }
+}
+
 
 // ============================================================================
 // Événements DOM
@@ -3104,10 +3380,187 @@ document.addEventListener('DOMContentLoaded', () => {
     if (state.previewItem) openShareModal(state.previewItem);
   });
   document.getElementById('btnCopyPreviewText').addEventListener('click', async () => {
-    if (state.previewTextContent) {
-      await window.kvault.copyToClipboard(state.previewTextContent, 0);
+    const content = state.previewEditing
+      ? document.getElementById('previewEditorTextarea').value
+      : state.previewTextContent;
+    if (content) {
+      await window.kvault.copyToClipboard(content, 0);
       showToast('📋 Contenu texte copié dans le presse-papiers !');
     }
+  });
+
+  // Pack 3 (v0.6.0) : Éditeur Cloud Direct & Aperçu Markdown dans la visionneuse
+  document.getElementById('btnToggleMdPreview').addEventListener('click', () => {
+    if (state.previewEditing) return;
+    state.previewMdRendered = !state.previewMdRendered;
+    const textEl = document.getElementById('previewCodeBox');
+    const mdBox = document.getElementById('previewMarkdownBox');
+    const toggleBtn = document.getElementById('btnToggleMdPreview');
+    if (state.previewMdRendered) {
+      mdBox.innerHTML = renderSimpleMarkdownToHtml(state.previewTextContent);
+      mdBox.classList.remove('hidden');
+      textEl.classList.add('hidden');
+      toggleBtn.textContent = '📄 Code Brut';
+    } else {
+      mdBox.classList.add('hidden');
+      textEl.classList.remove('hidden');
+      toggleBtn.textContent = '👁 Aperçu Markdown';
+    }
+  });
+
+  document.getElementById('btnEditPreviewText').addEventListener('click', () => {
+    if (!state.previewItem) return;
+    state.previewEditing = true;
+    const editor = document.getElementById('previewEditorTextarea');
+    editor.value = state.previewTextContent || '';
+    document.getElementById('previewCodeBox').classList.add('hidden');
+    document.getElementById('previewMarkdownBox').classList.add('hidden');
+    editor.classList.remove('hidden');
+    document.getElementById('btnEditPreviewText').classList.add('hidden');
+    document.getElementById('btnToggleMdPreview').classList.add('hidden');
+    document.getElementById('btnSavePreviewText').classList.remove('hidden');
+    document.getElementById('btnCancelEditPreviewText').classList.remove('hidden');
+    editor.focus();
+  });
+
+  document.getElementById('btnCancelEditPreviewText').addEventListener('click', () => {
+    state.previewEditing = false;
+    document.getElementById('previewEditorTextarea').classList.add('hidden');
+    document.getElementById('btnSavePreviewText').classList.add('hidden');
+    document.getElementById('btnCancelEditPreviewText').classList.add('hidden');
+    document.getElementById('btnEditPreviewText').classList.remove('hidden');
+    const ext = (state.previewItem?.name || '').toLowerCase();
+    const isMd = ext.endsWith('.md') || ext.endsWith('.markdown');
+    if (isMd) {
+      document.getElementById('btnToggleMdPreview').classList.remove('hidden');
+      if (state.previewMdRendered) {
+        document.getElementById('previewMarkdownBox').classList.remove('hidden');
+      } else {
+        document.getElementById('previewCodeBox').classList.remove('hidden');
+      }
+    } else {
+      document.getElementById('previewCodeBox').classList.remove('hidden');
+    }
+  });
+
+  document.getElementById('btnSavePreviewText').addEventListener('click', async () => {
+    if (!state.previewItem) return;
+    const newContent = document.getElementById('previewEditorTextarea').value;
+    const saveBtn = document.getElementById('btnSavePreviewText');
+    const prevLabel = saveBtn.textContent;
+    saveBtn.disabled = true;
+    saveBtn.textContent = '⏳ Enregistrement sur kDrive...';
+
+    const parentId = state.previewItem.parentId || state.currentFolderId;
+    const res = await window.kvault.saveTextFile(
+      parentId,
+      state.previewItem.name,
+      newContent,
+      state.previewItem.id
+    );
+
+    saveBtn.disabled = false;
+    saveBtn.textContent = prevLabel;
+
+    if (!res.ok) {
+      showToast(res.error, true);
+      return;
+    }
+
+    state.previewTextContent = newContent;
+    state.previewEditing = false;
+    document.getElementById('previewCodeBox').textContent = newContent;
+    document.getElementById('previewMarkdownBox').innerHTML = renderSimpleMarkdownToHtml(newContent);
+    document.getElementById('previewEditorTextarea').classList.add('hidden');
+    document.getElementById('btnSavePreviewText').classList.add('hidden');
+    document.getElementById('btnCancelEditPreviewText').classList.add('hidden');
+    document.getElementById('btnEditPreviewText').classList.remove('hidden');
+
+    const ext = (state.previewItem.name || '').toLowerCase();
+    const isMd = ext.endsWith('.md') || ext.endsWith('.markdown');
+    if (isMd) {
+      document.getElementById('btnToggleMdPreview').classList.remove('hidden');
+      if (state.previewMdRendered) {
+        document.getElementById('previewMarkdownBox').classList.remove('hidden');
+      } else {
+        document.getElementById('previewCodeBox').classList.remove('hidden');
+      }
+    } else {
+      document.getElementById('previewCodeBox').classList.remove('hidden');
+    }
+
+    showToast(`☁️ "${state.previewItem.name}" mis à jour directement sur kDrive !`);
+    await loadFolder(state.currentFolderId);
+  });
+
+  // Pack 3 (v0.6.0) : Modale Nouvelle Note / Document Markdown sur kDrive
+  const noteModal = document.getElementById('noteEditorModal');
+  const noteTextarea = document.getElementById('newNoteContentInput');
+  const notePreviewBox = document.getElementById('newNotePreviewBox');
+
+  const insertMarkdownSnippet = (prefix, suffix = '') => {
+    const start = noteTextarea.selectionStart || 0;
+    const end = noteTextarea.selectionEnd || 0;
+    const val = noteTextarea.value;
+    const selected = val.slice(start, end) || 'texte';
+    noteTextarea.value = val.slice(0, start) + prefix + selected + suffix + val.slice(end);
+    noteTextarea.focus();
+    noteTextarea.setSelectionRange(start + prefix.length, start + prefix.length + selected.length);
+  };
+
+  document.getElementById('btnNewNote').addEventListener('click', () => {
+    if (!state.connected) {
+      showToast('Connectez-vous d\'abord à votre kDrive.', true);
+      return;
+    }
+    document.getElementById('newNoteForm').reset();
+    document.getElementById('newNoteFileNameInput').value = 'Nouvelle-Note.md';
+    notePreviewBox.classList.add('hidden');
+    noteTextarea.classList.remove('hidden');
+    document.getElementById('btnMdPreviewToggle').textContent = '👁 Aperçu';
+    noteModal.classList.remove('hidden');
+    document.getElementById('newNoteFileNameInput').focus();
+  });
+
+  document.getElementById('btnCancelNewNote').addEventListener('click', () => noteModal.classList.add('hidden'));
+  document.getElementById('btnMdH1').addEventListener('click', () => insertMarkdownSnippet('# ', ''));
+  document.getElementById('btnMdBold').addEventListener('click', () => insertMarkdownSnippet('**', '**'));
+  document.getElementById('btnMdList').addEventListener('click', () => insertMarkdownSnippet('- ', ''));
+  document.getElementById('btnMdCheck').addEventListener('click', () => insertMarkdownSnippet('- [ ] ', ''));
+  document.getElementById('btnMdCode').addEventListener('click', () => insertMarkdownSnippet('`\n', '\n`'));
+
+  document.getElementById('btnMdPreviewToggle').addEventListener('click', () => {
+    const isHidden = notePreviewBox.classList.contains('hidden');
+    if (isHidden) {
+      notePreviewBox.innerHTML = renderSimpleMarkdownToHtml(noteTextarea.value || '*Aucun contenu à prévisualiser.*');
+      notePreviewBox.classList.remove('hidden');
+      noteTextarea.classList.add('hidden');
+      document.getElementById('btnMdPreviewToggle').textContent = '✏️ Éditer';
+    } else {
+      notePreviewBox.classList.add('hidden');
+      noteTextarea.classList.remove('hidden');
+      document.getElementById('btnMdPreviewToggle').textContent = '👁 Aperçu';
+      noteTextarea.focus();
+    }
+  });
+
+  document.getElementById('newNoteForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    let baseName = document.getElementById('newNoteFileNameInput').value.trim();
+    if (!baseName) return;
+    if (!/\.[a-z0-9]{1,8}$/i.test(baseName)) {
+      baseName += '.md';
+    }
+    const content = noteTextarea.value || '';
+
+    const res = await window.kvault.saveTextFile(state.currentFolderId, baseName, content, null);
+    if (!res.ok) {
+      showToast(res.error, true);
+      return;
+    }
+    noteModal.classList.add('hidden');
+    showToast(`📝 Note "${baseName}" créée sur votre kDrive !`);
+    await loadFolder(state.currentFolderId);
   });
 
   document.getElementById('btnPrevPreview').addEventListener('click', () => navigatePreview(-1));
@@ -3209,6 +3662,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const previewOpen = !document.getElementById('previewModal').classList.contains('hidden');
     if (previewOpen) {
+      if (state.previewEditing) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          document.getElementById('btnCancelEditPreviewText').click();
+        }
+        return;
+      }
       if (e.key === 'Escape') {
         e.preventDefault();
         closeUniversalPreview();
@@ -3236,6 +3696,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'moveModal',
         'shareModal',
         'deleteModal',
+        'noteEditorModal',
         'newBwItemModal',
         'generatorModal',
         'budgetExpenseModal',
@@ -3645,9 +4106,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Modale 1 : Nouvelle Dépense Commune
+  // Modale 1 : Nouvelle Dépense Commune (ou Édition v0.6.0)
   const expModal = document.getElementById('budgetExpenseModal');
   document.getElementById('btnOpenNewExpenseModal').addEventListener('click', () => {
+    state.editingExpenseId = null;
+    state.convertingShoppingAfterExpense = false;
+    document.getElementById('budgetExpenseModalTitle').textContent = '🧾 Nouvelle dépense commune';
     document.getElementById('budgetExpenseForm').reset();
     state.pendingExpenseReceipt = null;
     document.getElementById('expAttachedReceiptLabel').textContent = 'Aucun justificatif joint';
@@ -3662,7 +4126,11 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('expTitleInput').focus();
   });
 
-  document.getElementById('btnCancelExpenseModal').addEventListener('click', () => expModal.classList.add('hidden'));
+  document.getElementById('btnCancelExpenseModal').addEventListener('click', () => {
+    state.editingExpenseId = null;
+    state.convertingShoppingAfterExpense = false;
+    expModal.classList.add('hidden');
+  });
   ['expSplitModeInput', 'expAmountInput', 'expSplitPercentAInput', 'expExactShareAInput'].forEach((id) => {
     document.getElementById(id).addEventListener('input', updateExpenseModalLiveSplitPreview);
     document.getElementById(id).addEventListener('change', updateExpenseModalLiveSplitPreview);
@@ -3702,23 +4170,45 @@ document.addEventListener('DOMContentLoaded', () => {
       receipt: state.pendingExpenseReceipt
     };
 
-    const res = await window.kvault.budgetAddExpense(payload);
+    const isEditing = Boolean(state.editingExpenseId);
+    const res = isEditing
+      ? await window.kvault.budgetUpdateExpense(state.editingExpenseId, payload)
+      : await window.kvault.budgetAddExpense(payload);
+
     if (!res.ok) {
       showToast(res.error, true);
       return;
     }
+
+    state.editingExpenseId = null;
     expModal.classList.add('hidden');
     state.budgetData = res.data;
+
+    if (state.convertingShoppingAfterExpense) {
+      state.convertingShoppingAfterExpense = false;
+      const clearRes = await window.kvault.budgetClearCheckedShopping();
+      if (clearRes.ok) {
+        state.budgetData = clearRes.data;
+      }
+      switchBudgetTab('expenses');
+    }
+
     if (payload.date) {
       state.budgetMonth = payload.date.slice(0, 7);
     }
     renderBudgetAll();
-    showToast(`🧾 Dépense "${payload.title}" ajoutée et calculée !`);
+    showToast(
+      isEditing
+        ? `✏️ Dépense "${payload.title}" mise à jour !`
+        : `🧾 Dépense "${payload.title}" ajoutée et calculée !`
+    );
   });
 
-  // Modale 2 : Nouveau Paiement Récurrent / Calendrier
+  // Modale 2 : Nouveau Paiement Récurrent / Calendrier (ou Édition v0.6.0)
   const recModal = document.getElementById('budgetRecurringModal');
   const openRecModal = () => {
+    state.editingRecurringId = null;
+    document.getElementById('budgetRecurringModalTitle').textContent = '📅 Nouveau paiement récurrent';
     document.getElementById('budgetRecurringForm').reset();
     document.getElementById('recDayInput').value = '5';
     recModal.classList.remove('hidden');
@@ -3726,7 +4216,10 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   document.getElementById('btnOpenNewRecurringModal').addEventListener('click', openRecModal);
   document.getElementById('btnAddRecurringFromTab').addEventListener('click', openRecModal);
-  document.getElementById('btnCancelRecurringModal').addEventListener('click', () => recModal.classList.add('hidden'));
+  document.getElementById('btnCancelRecurringModal').addEventListener('click', () => {
+    state.editingRecurringId = null;
+    recModal.classList.add('hidden');
+  });
 
   document.getElementById('budgetRecurringForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -3740,16 +4233,165 @@ document.addEventListener('DOMContentLoaded', () => {
       notes: document.getElementById('recNotesInput').value.trim()
     };
 
-    const res = await window.kvault.budgetAddRecurring(payload);
+    const isEditing = Boolean(state.editingRecurringId);
+    const res = isEditing
+      ? await window.kvault.budgetUpdateRecurring(state.editingRecurringId, payload)
+      : await window.kvault.budgetAddRecurring(payload);
+
     if (!res.ok) {
       showToast(res.error, true);
       return;
     }
+    state.editingRecurringId = null;
     recModal.classList.add('hidden');
     state.budgetData = res.data;
     switchBudgetTab('calendar');
     renderBudgetAll();
-    showToast(`📅 Échéance récurrente "${payload.title}" ajoutée au calendrier !`);
+    showToast(
+      isEditing
+        ? `✏️ Échéance récurrente "${payload.title}" modifiée !`
+        : `📅 Échéance récurrente "${payload.title}" ajoutée au calendrier !`
+    );
+  });
+
+  // Pack 1 (v0.6.0) : Liste de courses partagée & Conversion 1-clic en Dépense
+  document.getElementById('shoppingQuickForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const titleInp = document.getElementById('shopNameInput');
+    const qtyInp = document.getElementById('shopQtyInput');
+    const priceInp = document.getElementById('shopPriceInput');
+    const byInp = document.getElementById('shopAddedBySelect');
+
+    const title = titleInp.value.trim();
+    if (!title) return;
+
+    const res = await window.kvault.budgetAddShoppingItem({
+      title,
+      quantity: qtyInp.value.trim(),
+      estimatedAmount: Number(priceInp.value) || 0,
+      category: 'groceries',
+      addedBy: byInp.value
+    });
+
+    if (!res.ok) {
+      showToast(res.error, true);
+      return;
+    }
+
+    titleInp.value = '';
+    qtyInp.value = '';
+    priceInp.value = '';
+    state.budgetData = res.data;
+    renderBudgetAll();
+    titleInp.focus();
+  });
+
+  document.getElementById('btnClearCheckedShopping').addEventListener('click', async () => {
+    const res = await window.kvault.budgetClearCheckedShopping();
+    if (res.ok) {
+      state.budgetData = res.data;
+      renderBudgetAll();
+      showToast('🧹 Articles cochés retirés de la liste !');
+    } else {
+      showToast(res.error, true);
+    }
+  });
+
+  document.getElementById('btnConvertShoppingToExpense').addEventListener('click', () => {
+    const items = state.budgetData?.shoppingList || [];
+    const checked = items.filter((i) => i.checked);
+    if (!checked.length) {
+      showToast('Cochez d\'abord les articles achetés dans la liste pour les convertir en dépense.', true);
+      return;
+    }
+
+    const totalEst = Math.round(checked.reduce((s, i) => s + (Number(i.estimatedAmount) || 0), 0) * 100) / 100;
+    const summaryLines = checked
+      .map((i) => `• ${i.title}${i.quantity ? ` (${i.quantity})` : ''}${i.estimatedAmount > 0 ? ` — ${formatCurrency(i.estimatedAmount)}` : ''}`)
+      .join('\n');
+
+    state.editingExpenseId = null;
+    state.convertingShoppingAfterExpense = true;
+    document.getElementById('budgetExpenseModalTitle').textContent = '🛒 Convertir les courses cochées en dépense';
+    document.getElementById('budgetExpenseForm').reset();
+    state.pendingExpenseReceipt = null;
+    document.getElementById('expAttachedReceiptLabel').textContent = 'Aucun justificatif joint';
+
+    document.getElementById('expTitleInput').value = `Courses (${checked.length} article${checked.length > 1 ? 's' : ''})`;
+    if (totalEst > 0) {
+      document.getElementById('expAmountInput').value = String(totalEst);
+    }
+    document.getElementById('expCategoryInput').value = checked[0]?.category || 'groceries';
+    document.getElementById('expDateInput').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('expStatusInput').value = 'paid';
+    document.getElementById('expSplitModeInput').value = 'default_ratio';
+    document.getElementById('expNotesInput').value = summaryLines;
+
+    updateExpenseModalLiveSplitPreview();
+    expModal.classList.remove('hidden');
+    document.getElementById('expAmountInput').focus();
+  });
+
+  // Pack 1 (v0.6.0) : Synchronisation Cloud kDrive & Exports CSV / Rapport PDF
+  const runBudgetCloudSync = async () => {
+    const syncBtn = document.getElementById('btnBudgetSyncKDrive');
+    const prevHtml = syncBtn.innerHTML;
+    syncBtn.disabled = true;
+    syncBtn.textContent = '⏳ Sync kDrive...';
+
+    const res = await window.kvault.budgetSyncKDrive();
+    syncBtn.disabled = false;
+    syncBtn.innerHTML = prevHtml;
+
+    if (!res.ok) {
+      showToast(res.error, true);
+      return;
+    }
+    state.budgetData = res.data;
+    renderBudgetAll();
+    showToast(
+      res.hadRemote
+        ? '☁️ Budget fusionné et synchronisé avec succès sur votre kDrive (/Budget Couple/couple-budget.json) !'
+        : '☁️ Budget sauvegardé sur votre kDrive (/Budget Couple/couple-budget.json) !'
+    );
+  };
+
+  document.getElementById('btnBudgetSyncKDrive').addEventListener('click', runBudgetCloudSync);
+
+  document.getElementById('chkBudgetAutoSyncKDrive').addEventListener('change', async (e) => {
+    const enabled = e.target.checked;
+    const res = await window.kvault.budgetSetCloudSync(enabled);
+    if (res.ok) {
+      state.budgetData = res.data;
+      renderBudgetAll();
+      if (enabled) {
+        await runBudgetCloudSync();
+      } else {
+        showToast('Synchronisation automatique kDrive désactivée.');
+      }
+    }
+  });
+
+  document.getElementById('btnExportBudgetCsv').addEventListener('click', async () => {
+    const res = await window.kvault.budgetExportCsv(state.budgetMonth);
+    if (!res.ok) {
+      showToast(res.error, true);
+      return;
+    }
+    if (!res.canceled) {
+      showToast('📊 Fichier CSV (Excel) exporté avec succès !');
+    }
+  });
+
+  document.getElementById('btnExportBudgetReport').addEventListener('click', async () => {
+    const res = await window.kvault.budgetExportReport(state.budgetMonth);
+    if (!res.ok) {
+      showToast(res.error, true);
+      return;
+    }
+    if (!res.canceled) {
+      showToast('📄 Bilan imprimable / PDF généré et ouvert !');
+    }
   });
 
   // Modale 3 : Enregistrer un remboursement

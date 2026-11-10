@@ -390,6 +390,49 @@ class KDriveWebDavClient {
   async emptyTrash() {
     throw new Error('Mode API requis pour vider la corbeille.');
   }
+
+  async uploadBuffer(parentPath = '/', fileName = 'note.md', contentBuffer = Buffer.alloc(0), existingFileId = null) {
+    this.validateCredentials();
+    const buf = Buffer.isBuffer(contentBuffer) ? contentBuffer : Buffer.from(String(contentBuffer || ''), 'utf8');
+    const totalSize = buf.length;
+
+    let remotePath = '';
+    if (existingFileId && String(existingFileId).startsWith('/')) {
+      remotePath = this.normalizeDavPath(existingFileId);
+    } else {
+      const base = this.normalizeDavPath(parentPath).replace(/\/+$/, '');
+      remotePath = `${base}/${fileName}`;
+    }
+
+    return new Promise((resolve, reject) => {
+      const req = https.request(
+        {
+          hostname: this.getBaseHost(),
+          port: 443,
+          path: this.encodeDavPath(remotePath),
+          method: 'PUT',
+          headers: {
+            Authorization: this.getAuthHeader(),
+            'Content-Type': guessMimeType(fileName),
+            'Content-Length': totalSize
+          }
+        },
+        (res) => {
+          res.resume();
+          res.on('end', () => {
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+              resolve({ id: remotePath, name: fileName, type: 'file', size: totalSize });
+            } else {
+              reject(new Error(`Échec enregistrement WebDAV de "${fileName}" (HTTP ${res.statusCode}).`));
+            }
+          });
+        }
+      );
+
+      req.on('error', (err) => reject(new Error(`Erreur réseau WebDAV : ${err.message}`)));
+      req.end(buf);
+    });
+  }
 }
 
 module.exports = { KDriveWebDavClient };

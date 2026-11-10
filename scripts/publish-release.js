@@ -22,39 +22,44 @@ function getGitHubTokenFromGitCredential() {
 }
 
 function buildReleaseTitle(tagName) {
-  return `KVault Desktop ${tagName} — Module Budget & Dépenses de Couple`;
+  return `KVault Desktop ${tagName} — Sync Cloud Budget Couple, Liste de Courses, Bilan 12 Mois & Éditeur Cloud kDrive`;
 }
 
 function buildReleaseBody(version) {
-  return `## 🚀 KVault Desktop \`v${version}\` — Module Budget & Dépenses de Couple
+  return `## 🚀 KVault Desktop \`v${version}\` — Budget Couple Cloud Partagé & Éditeur Cloud Direct kDrive
 
-Bienvenue dans la version **\`v${version}\`** de **KVault Desktop**, l'application Windows tout-en-un qui réunit votre cloud **Infomaniak kDrive**, votre coffre-fort de mots de passe **Bitwarden / Vaultwarden** et désormais votre gestionnaire complet de **Dépenses & Budget de Couple**.
+Bienvenue dans la version **\`v${version}\`** de **KVault Desktop**, l'application Windows tout-en-un qui réunit votre cloud **Infomaniak kDrive**, votre coffre-fort de mots de passe **Bitwarden / Vaultwarden** et votre gestionnaire complet de **Dépenses & Budget de Couple**.
 
 ---
 
 ### ✨ Nouveautés majeures de la \`v${version}\`
 
-#### 💑 Nouveau Module : Dépenses & Budget de Couple
-- **Calcul automatique de l'équilibre ("Qui doit combien à qui ?")** :
-  - Séparation des **2 profils personnalisables** (prénoms, emojis, revenus mensuels optionnels).
-  - Règles de partage flexibles sur chaque dépense : **50% / 50%**, **Prorata automatique des revenus** (ex: \`60% / 40%\`), **Pourcentage personnalisé**, **Montant exact en €** ou **Avance 100%**.
-  - Calcul en temps réel de la part théorique vs dépenses payées par chacun et bouton **\`✅ Marquer comme remboursé\`** en 1 clic avec historique des virements.
-- **Statut de paiement & Justificatifs liés à kDrive** :
-  - Basculez une dépense entre **\`✅ Payé\`** et **\`⏳ À payer\`** en un clic, ajoutez des infos/notes et filtrez par payeur, statut ou catégorie (*Courses*, *Loyer*, *Factures*, *Resto*, *Maison*, *Vacances*).
-  - **📎 Factures & Tickets de caisse sur kDrive** : joignez un PDF ou une photo de ticket directement depuis une dépense — il est sauvegardé automatiquement dans le dossier \`Justificatifs Budget\` de votre kDrive et s'ouvre dans la visionneuse intégrée !
-- **📅 Calendrier mensuel & Paiements récurrents** :
-  - Planifiez vos charges fixes mensuelles (*Loyer*, *Électricité*, *Fibre Internet*, *Abonnements*) avec leur jour de prélèvement.
-  - Visualisez-les sur le **calendrier mensuel** (\`✅ Payé\`, \`⏳ À venir\`, \`⚠️ En retard\`) et pointez-les en 1 clic dès qu'elles sont payées pour les injecter dans les dépenses du mois.
-- **🎯 Cagnottes & Projets communs à deux** :
-  - Créez des cagnottes pour vos projets (*Vacances*, *Équipement maison*, *Cadeaux*) et suivez la barre de progression bicolore avec les contributions de chacun.
+#### 💑 Pack 1 — Budget Couple "Niveau Pro & Cloud Partagé"
+- **☁️ Synchronisation Cloud partagée sur kDrive (\`/Budget Couple/couple-budget.json\`)** :
+  - Synchronisez et fusionnez intelligemment votre budget directement sur votre kDrive Infomaniak en 1 clic (**\`☁️ Sync kDrive\`**) ou automatiquement à chaque modification.
+  - Idéal pour partager exactement les mêmes comptes, dépenses, échéances et listes de courses entre vos **2 PC** !
+- **✏️ Édition complète des dépenses et des échéances récurrentes** :
+  - Bouton **\`✏️\`** sur chaque dépense et chaque paiement récurrent pour corriger un montant, changer le payeur, ajuster la répartition, modifier la date ou ajouter un justificatif kDrive après coup.
+- **🛒 Liste de courses partagée & Conversion 1-clic en Dépense** :
+  - Nouvel onglet **\`Liste de courses\`** pour noter vos achats à prévoir à deux (article, quantité, prix estimé, ajouté par Loïc / Cloé).
+  - Cochez vos articles en faisant les courses puis cliquez sur **\`🧾 Convertir les cochés en Dépense\`** : la dépense commune est pré-remplie automatiquement avec la somme et le détail des articles en note !
+- **📈 Bilan Annuel, Graphiques 12 mois & Exports CSV / Rapport PDF** :
+  - Nouvel onglet **\`Bilan & Export\`** avec graphique interactif sur 12 mois, total annuel, moyenne mensuelle et premier poste de dépense.
+  - Export **\`📊 Exporter CSV (Excel)\`** (encodage UTF-8 BOM compatible Excel) et **\`🖨️ Bilan Imprimable / PDF\`** en 1 clic.
+
+#### 📝 Pack 3 — Éditeur Cloud Direct & Création de Notes / Markdown sur kDrive
+- **✏️ Éditeur Cloud Direct dans la visionneuse (sans télécharger)** :
+  - Ouvrez n'importe quel fichier texte, Markdown (\`.md\`), JSON, CSV, script ou note sur votre kDrive, cliquez sur **\`✏️ Modifier dans le cloud\`**, éditez votre texte et cliquez sur **\`💾 Enregistrer sur kDrive\`** : le fichier est mis à jour directement sur le cloud Infomaniak !
+  - Bouton **\`👁 Aperçu Markdown\`** pour basculer entre le rendu Markdown mis en page et le code brut.
+- **📝 Création rapide de Note / Document Markdown (\`+ Note\`)** :
+  - Nouveau bouton **\`📝 + Note\`** dans la barre d'outils de l'explorateur kDrive avec barre de formatage Markdown (\`H1\`, \`Gras\`, \`Liste\`, \`Tâche\`, \`Code\`, \`Aperçu\`) pour créer des notes directement dans le dossier kDrive courant.
 
 ---
 
 ### 📦 Téléchargement & Utilisation rapide (\`.exe\`)
 
 1. Téléchargez le fichier **\`KVault-Desktop-${version}-Portable.exe\`** ci-dessous dans la section **Assets**.
-2. Lancez l'application et tapez votre code d'accès (**\`0000\`** par défaut lors d'une première installation).
-3. Ouvrez l'onglet **\`💑 Dépenses Couple\`** dans la barre latérale gauche !`;
+2. Lancez l'application (ou utilisez **\`⚙️ Paramètres & Sécurité\` → \`🔄 Vérifier les mises à jour\`** depuis une version précédente).`;
 }
 
 async function main() {
